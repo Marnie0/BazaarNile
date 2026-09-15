@@ -1,0 +1,18 @@
+{
+  "name": "bazaarnile",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "dev": "concurrently -n api,web -c blue,magenta \"npm run dev -w @bazaarnile/api\" \"npm run dev -w @bazaarnile/web\"",
+    "build": "npm run build -w @bazaarnile/api && npm run build -w @bazaarnile/web",
+    "lint": "npm run lint -w @bazaarnile/api && npm run lint -w @bazaarnile/web",
+    "typecheck": "npm run typecheck -w @bazaarnile/api && npm run typecheck -w @bazaarnile/web",
+    "db:generate": "npm run db:generate -w @bazaarnile/api",
+    "db:migrate": "npm run db:migrate -w @bazaarnile/api",
+    "db:seed": "npm run db:seed -w @bazaarnile/api"
+  },
+  "devDependencies": { "concurrently": "^9.2.1" },
+  "engines": { "node": ">=20" }
+}
+
