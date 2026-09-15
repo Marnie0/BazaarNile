@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { env } from '../config/env.js';
 import { prisma } from '../lib/prisma.js';
@@ -40,7 +40,12 @@ authRouter.post('/register', asyncHandler(async (req, res) => {
   if (existing) throw new AppError(409, 'Email or username is already in use');
   const { password, ...profile } = data;
   const user = await prisma.user.create({
-    data: { ...profile, passwordHash: await bcrypt.hash(password, 12) },
+    data: {
+      email: profile.email,
+      username: profile.username,
+      displayName: profile.displayName,
+      passwordHash: await bcrypt.hash(password, 12),
+    },
     select: safeUser,
   });
   const accessToken = await issueSession(user, res);

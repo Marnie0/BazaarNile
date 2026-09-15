@@ -1,4 +1,4 @@
-export const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api';
+export const API_URL = import.meta.env.VITE_API_URL ?? '/api';
 
 let accessToken: string | null = localStorage.getItem('bn_access_token');
 export const setAccessToken = (token: string | null) => {
