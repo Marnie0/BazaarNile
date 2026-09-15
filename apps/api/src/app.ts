@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import { env } from './config/env.js';
 import { authRouter } from './routes/auth.js';
 import { catalogRouter } from './routes/catalog.js';
+import { shoppingRouter } from './routes/shopping.js';
 import { errorHandler, notFound } from './utils/errors.js';
 
 export const app = express();
@@ -17,6 +18,7 @@ app.use(cookieParser());
 app.use('/api/auth', rateLimit({ windowMs: 15 * 60_000, limit: 100, standardHeaders: true, legacyHeaders: false }), authRouter);
 app.use('/api', catalogRouter);
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
+app.use('/api', shoppingRouter);
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.use(notFound);
 app.use(errorHandler);

@@ -1,6 +1,6 @@
 # BazaarNile
 
-AI-powered multi-vendor marketplace. This repository currently contains the Phase 1 foundation: authentication, catalog, categories, search, public profiles, and the PostgreSQL data model.
+AI-powered multi-vendor marketplace. Phases 1 and 2 are live: authentication, catalog discovery, profiles, cart, wishlist, checkout, inventory-safe ordering, customer order history, and cancellation.
 
 ## Stack
 
@@ -24,12 +24,11 @@ The storefront runs at `http://localhost:5173` and the API at `http://localhost:
 
 ## Phase roadmap
 
-1. Core marketplace (current)
-2. Cart, wishlist, checkout, and orders
-3. Seller Center
+1. Core marketplace (complete)
+2. Cart, wishlist, checkout, and orders (complete)
+3. Seller Center (next)
 4. Admin panel
 5. AI recommendations
 6. Conversational product assistant
 7. Visual search
 8. Multi-vendor expansion, notifications, coupons, and advanced analytics
-
