@@ -4,11 +4,18 @@ export const API_URL = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API
 
 let accessToken: string | null = localStorage.getItem('bn_access_token');
 let refreshPromise: Promise<string | null> | null = null;
+const accessTokenListeners = new Set<() => void>();
 export const hasAccessToken = () => Boolean(accessToken);
+export const subscribeToAccessToken = (listener: () => void) => {
+  accessTokenListeners.add(listener);
+  return () => accessTokenListeners.delete(listener);
+};
 export const setAccessToken = (token: string | null) => {
+  const changed = accessToken !== token;
   accessToken = token;
   if (token) localStorage.setItem('bn_access_token', token);
   else localStorage.removeItem('bn_access_token');
+  if (changed) accessTokenListeners.forEach((listener) => listener());
 };
 
 export class ApiError extends Error {
