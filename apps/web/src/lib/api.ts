@@ -50,3 +50,10 @@ export type Order = {
   shippingName: string; shippingPhone: string; shippingAddress: string; shippingCity: string; shippingRegion: string;
   notes?: string; items: OrderItem[]; createdAt: string; updatedAt: string;
 };
+export type SellerProduct = Product & { status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED'; updatedAt: string; _count: { orderItems: number } };
+export type SellerOverview = {
+  metrics: { revenue: string; grossSales: string; unitsSold: number; totalProducts: number; activeProducts: number; lowStock: number; outOfStock: number };
+  chart: { date: string; revenue: string }[];
+  recentSales: (OrderItem & { order: { orderNumber: string; status: Order['status']; shippingName: string; createdAt: string } })[];
+  topProducts: { productName: string; units: number; revenue: string }[];
+};

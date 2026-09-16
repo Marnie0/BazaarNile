@@ -1,6 +1,6 @@
 # BazaarNile
 
-AI-powered multi-vendor marketplace. Phases 1 and 2 are live: authentication, catalog discovery, profiles, cart, wishlist, checkout, inventory-safe ordering, customer order history, and cancellation.
+AI-powered multi-vendor marketplace. Phases 1-3 are live: authentication, catalog discovery, profiles, cart, wishlist, checkout, inventory-safe ordering, customer orders, and a complete Seller Center with catalog management and revenue analytics.
 
 ## Stack
 
@@ -26,7 +26,7 @@ The storefront runs at `http://localhost:5173` and the API at `http://localhost:
 
 1. Core marketplace (complete)
 2. Cart, wishlist, checkout, and orders (complete)
-3. Seller Center (next)
+3. Seller Center, inventory, product CRUD, and analytics (complete)
 4. Admin panel
 5. AI recommendations
 6. Conversational product assistant

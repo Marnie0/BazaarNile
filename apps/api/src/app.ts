@@ -7,6 +7,7 @@ import { env } from './config/env.js';
 import { authRouter } from './routes/auth.js';
 import { catalogRouter } from './routes/catalog.js';
 import { shoppingRouter } from './routes/shopping.js';
+import { sellerRouter } from './routes/seller.js';
 import { errorHandler, notFound } from './utils/errors.js';
 
 export const app = express();
@@ -19,6 +20,7 @@ app.use('/api/auth', rateLimit({ windowMs: 15 * 60_000, limit: 100, standardHead
 app.use('/api', catalogRouter);
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 app.use('/api', shoppingRouter);
+app.use('/api', sellerRouter);
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.use(notFound);
 app.use(errorHandler);

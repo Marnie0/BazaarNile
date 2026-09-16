@@ -1,4 +1,4 @@
-import { Heart, Package, Search, ShoppingBag, UserRound } from 'lucide-react';
+import { Heart, Package, Search, ShoppingBag, Store, UserRound } from 'lucide-react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -23,6 +23,7 @@ export function Header() {
       </form>
       <Button variant="ghost" size="icon" aria-label="Wishlist" asChild><Link to="/wishlist"><Heart size={20}/></Link></Button>
       <Button variant="ghost" size="icon" aria-label="Orders" className="hidden sm:inline-flex" asChild><Link to="/orders"><Package size={20}/></Link></Button>
+      <Button variant="ghost" size="icon" aria-label="Seller Center" className="hidden sm:inline-flex" asChild><Link to="/seller"><Store size={20}/></Link></Button>
       <Button variant="ghost" size="icon" aria-label="Account" asChild><Link to="/login"><UserRound size={20}/></Link></Button>
       <Button variant="ghost" size="icon" aria-label={`Cart with ${count} items`} className="relative" asChild><Link to="/cart"><ShoppingBag size={20}/>{count > 0 && <span className="absolute -right-1 -top-1 grid size-5 place-items-center rounded-full bg-gold text-[10px] font-bold text-ink">{count}</span>}</Link></Button>
     </div>
