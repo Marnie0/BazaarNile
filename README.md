@@ -8,6 +8,7 @@ AI-powered multi-vendor marketplace. Phases 1–5 are live: authentication, shop
 - Node.js, Express, TypeScript, Zod
 - PostgreSQL, Prisma ORM
 - JWT access tokens, rotating refresh tokens, bcrypt
+- Gemini 3.6 Flash product and cart summaries
 
 ## Run locally
 

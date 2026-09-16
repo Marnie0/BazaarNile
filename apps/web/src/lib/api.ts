@@ -70,6 +70,7 @@ export type User = { id?: string; email?: string; username: string; displayName:
 export type Category = { id: string; name: string; slug: string; description?: string; imageUrl?: string; _count?: { products: number } };
 export type Product = { id: string; name: string; slug: string; description: string; price: string; compareAt?: string; imageUrl: string; images: string[]; inventory: number; featured: boolean; status?: ProductStatus; category: Category; seller: Pick<User, 'username' | 'displayName' | 'avatarUrl' | 'bio'> };
 export type Recommendations = { products: Product[]; personalized: boolean; reason: string };
+export type AiSummary = { summary: string };
 export type CartItem = { id: string; quantity: number; product: Product };
 export type Cart = { id: string; items: CartItem[]; updatedAt: string };
 export type WishlistItem = { id: string; product: Product; createdAt: string };

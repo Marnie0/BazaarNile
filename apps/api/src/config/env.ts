@@ -9,6 +9,8 @@ const schema = z.object({
   JWT_REFRESH_SECRET: z.string().min(32),
   ACCESS_TOKEN_TTL: z.string().default('15m'),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().positive().default(7),
+  GEMINI_API_KEY: z.string().min(1).optional(),
+  GEMINI_MODEL: z.string().min(1).default('gemini-3.6-flash'),
   CLIENT_URL: z.string().refine(
     (value) => value.split(',').every((url) => URL.canParse(url.trim())),
     'CLIENT_URL must contain one or more comma-separated URLs',
