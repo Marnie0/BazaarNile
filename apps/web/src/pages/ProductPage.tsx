@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Heart, Minus, Plus, ShieldCheck, Truck } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '../components/ui/Button';
 import { api, hasAccessToken, type Cart, type Product, type WishlistItem } from '../lib/api';
 import { money } from '../lib/utils';
@@ -11,6 +11,10 @@ export function ProductPage() {
   const [quantity, setQuantity] = useState(1); const [message, setMessage] = useState(''); const navigate = useNavigate(); const queryClient = useQueryClient();
   const { data, isLoading, isError } = useQuery({ queryKey: ['product', slug], queryFn: () => api<{ product: Product }>(`/products/${slug}`) });
   const p = data?.product;
+  useEffect(() => {
+    if (!p || !hasAccessToken()) return;
+    api<void>(`/products/${p.id}/views`, { method: 'POST' }).catch(() => undefined);
+  }, [p]);
   const cart = useMutation({ mutationFn: () => { if (!p) throw new Error('Product not found'); return api<{ cart: Cart }>('/cart/items', { method: 'POST', body: JSON.stringify({ productId: p.id, quantity }) }); }, onSuccess: (result) => { queryClient.setQueryData(['cart'], result); setMessage('Added to your cart'); }, onError: (error) => setMessage(error instanceof Error ? error.message : 'Could not add to cart') });
   const wishlist = useMutation({ mutationFn: () => { if (!p) throw new Error('Product not found'); return api<{ item: WishlistItem }>(`/wishlist/${p.id}`, { method: 'POST' }); }, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['wishlist'] }); setMessage('Saved to your wishlist'); } });
   if (isLoading) return <div className="container-shell py-20">Loading product…</div>;

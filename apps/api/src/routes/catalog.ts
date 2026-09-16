@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { asyncHandler } from '../utils/async-handler.js';
 import { AppError } from '../utils/errors.js';
+import { requireAuth } from '../middleware/auth.js';
 
 export const catalogRouter = Router();
 
@@ -48,6 +49,70 @@ catalogRouter.get('/products/:slug', asyncHandler(async (req, res) => {
   });
   if (!product) throw new AppError(404, 'Product not found');
   res.json({ product });
+}));
+
+catalogRouter.post('/products/:productId/views', requireAuth, asyncHandler(async (req, res) => {
+  const productId = z.string().min(1).parse(req.params.productId);
+  const product = await prisma.product.findFirst({ where: { id: productId, status: ProductStatus.ACTIVE }, select: { id: true } });
+  if (!product) throw new AppError(404, 'Product not found');
+  await prisma.productView.upsert({
+    where: { userId_productId: { userId: req.user!.id, productId } },
+    create: { userId: req.user!.id, productId },
+    update: { viewCount: { increment: 1 }, lastViewedAt: new Date() },
+  });
+  res.status(204).send();
+}));
+
+const recommendationWords = (value: string) => new Set(
+  value.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length > 3),
+);
+
+catalogRouter.get('/recommendations', requireAuth, asyncHandler(async (req, res) => {
+  const { limit } = z.object({ limit: z.coerce.number().int().min(1).max(12).default(4) }).parse(req.query);
+  const views = await prisma.productView.findMany({
+    where: { userId: req.user!.id },
+    orderBy: { lastViewedAt: 'desc' },
+    take: 20,
+    include: { product: { select: { id: true, name: true, description: true, price: true, categoryId: true } } },
+  });
+  const viewedIds = views.map((view) => view.productId);
+  const candidates = await prisma.product.findMany({
+    where: { status: ProductStatus.ACTIVE, inventory: { gt: 0 }, id: { notIn: viewedIds } },
+    orderBy: [{ featured: 'desc' }, { createdAt: 'desc' }],
+    take: 100,
+    include: { category: { select: { name: true, slug: true } }, seller: { select: { username: true, displayName: true, avatarUrl: true } } },
+  });
+
+  if (!views.length) {
+    res.json({ products: candidates.slice(0, limit), personalized: false, reason: 'Popular picks to get you started' });
+    return;
+  }
+
+  const now = Date.now();
+  const interests = views.map((view) => {
+    const ageDays = Math.max(0, (now - view.lastViewedAt.getTime()) / 86_400_000);
+    return {
+      ...view,
+      weight: (1 + Math.log2(view.viewCount + 1)) * Math.exp(-ageDays / 30),
+      words: recommendationWords(`${view.product.name} ${view.product.description}`),
+    };
+  });
+  const averagePrice = interests.reduce((sum, view) => sum + Number(view.product.price) * view.weight, 0)
+    / interests.reduce((sum, view) => sum + view.weight, 0);
+  const scored = candidates.map((product) => {
+    const words = recommendationWords(`${product.name} ${product.description}`);
+    let categoryScore = 0; let textScore = 0;
+    for (const view of interests) {
+      if (view.product.categoryId === product.categoryId) categoryScore += 5 * view.weight;
+      let matches = 0;
+      words.forEach((word) => { if (view.words.has(word)) matches += 1; });
+      textScore += Math.min(matches, 4) * view.weight;
+    }
+    const priceDistance = Math.abs(Number(product.price) - averagePrice) / Math.max(averagePrice, 1);
+    const priceScore = Math.max(0, 3 - priceDistance * 3);
+    return { product, score: categoryScore + textScore + priceScore + (product.featured ? 1 : 0) };
+  }).sort((a, b) => b.score - a.score);
+  res.json({ products: scored.slice(0, limit).map(({ product }) => product), personalized: true, reason: 'Inspired by products you viewed' });
 }));
 
 catalogRouter.get('/profiles/:username', asyncHandler(async (req, res) => {
