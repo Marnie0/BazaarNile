@@ -194,10 +194,17 @@ adminRouter.post('/admin/coupons', asyncHandler(async (req, res) => {
 
 adminRouter.patch('/admin/coupons/:id', asyncHandler(async (req, res) => {
   const id = z.string().min(1).parse(req.params.id);
-  const data = couponSchema.partial().parse(req.body);
-  if (data.type === CouponType.PERCENTAGE && data.value !== undefined && data.value > 100) throw new AppError(400, 'Percentage coupons cannot exceed 100%');
+  const data = z.object({ active: z.boolean() }).strict().parse(req.body);
   const coupon = await prisma.coupon.update({ where: { id }, data });
   res.json({ coupon });
+}));
+
+adminRouter.delete('/admin/coupons/:id', asyncHandler(async (req, res) => {
+  const id = z.string().min(1).parse(req.params.id);
+  const coupon = await prisma.coupon.findUnique({ where: { id }, select: { id: true } });
+  if (!coupon) throw new AppError(404, 'Coupon not found');
+  await prisma.coupon.delete({ where: { id } });
+  res.status(204).send();
 }));
 
 adminRouter.get('/admin/users', asyncHandler(async (req, res) => {
@@ -269,6 +276,18 @@ adminRouter.patch('/admin/products/:id/moderate', asyncHandler(async (req, res) 
   if (!existing) throw new AppError(404, 'Product not found');
   const product = await prisma.product.update({
     where: { id }, data: { status },
+    include: { category: true, seller: { select: { id: true, username: true, displayName: true, avatarUrl: true } }, _count: { select: { orderItems: true } } },
+  });
+  res.json({ product });
+}));
+
+adminRouter.patch('/admin/products/:id/inventory', asyncHandler(async (req, res) => {
+  const id = z.string().min(1).parse(req.params.id);
+  const { inventory } = z.object({ inventory: z.coerce.number().int().min(0).max(1_000_000) }).parse(req.body);
+  const existing = await prisma.product.findUnique({ where: { id }, select: { id: true } });
+  if (!existing) throw new AppError(404, 'Product not found');
+  const product = await prisma.product.update({
+    where: { id }, data: { inventory },
     include: { category: true, seller: { select: { id: true, username: true, displayName: true, avatarUrl: true } }, _count: { select: { orderItems: true } } },
   });
   res.json({ product });
