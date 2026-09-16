@@ -48,7 +48,7 @@ aiRouter.post('/ai/cart/summary', asyncHandler(async (req, res) => {
 
 const assistantMessagesSchema = z.object({
   messages: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().trim().min(1).max(800) })).min(1).max(12),
-}).refine((value) => value.messages.at(-1)?.role === 'user', { message: 'The last message must be from the customer' });
+}).refine((value) => value.messages[value.messages.length - 1]?.role === 'user', { message: 'The last message must be from the customer' });
 
 const assistantResultSchema = z.object({
   reply: z.string().trim().min(1).max(2_000),
