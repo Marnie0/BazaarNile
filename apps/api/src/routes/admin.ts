@@ -178,7 +178,17 @@ adminRouter.get('/admin/coupons', asyncHandler(async (_req, res) => {
 
 adminRouter.post('/admin/coupons', asyncHandler(async (req, res) => {
   const data = couponSchema.parse(req.body);
-  const coupon = await prisma.coupon.create({ data: { ...data, maxDiscount: data.maxDiscount ?? null, usageLimit: data.usageLimit ?? null, expiresAt: data.expiresAt ?? null } });
+  const coupon = await prisma.coupon.create({ data: {
+    code: data.code,
+    type: data.type,
+    value: data.value,
+    minOrderAmount: data.minOrderAmount,
+    maxDiscount: data.maxDiscount ?? null,
+    usageLimit: data.usageLimit ?? null,
+    startsAt: data.startsAt,
+    expiresAt: data.expiresAt ?? null,
+    active: data.active,
+  } });
   res.status(201).json({ coupon });
 }));
 
