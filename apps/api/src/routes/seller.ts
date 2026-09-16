@@ -8,7 +8,7 @@ import { asyncHandler } from '../utils/async-handler.js';
 import { AppError } from '../utils/errors.js';
 
 export const sellerRouter = Router();
-sellerRouter.use(requireAuth);
+sellerRouter.use('/seller', requireAuth);
 
 const productInclude = {
   category: { select: { id: true, name: true, slug: true } },

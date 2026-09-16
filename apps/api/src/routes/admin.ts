@@ -8,7 +8,7 @@ import { asyncHandler } from '../utils/async-handler.js';
 import { AppError } from '../utils/errors.js';
 
 export const adminRouter = Router();
-adminRouter.use(requireAuth, requireAdmin);
+adminRouter.use('/admin', requireAuth, requireAdmin);
 
 const safeUser = {
   id: true, email: true, username: true, displayName: true, avatarUrl: true,

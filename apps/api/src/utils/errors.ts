@@ -1,4 +1,5 @@
 import type { ErrorRequestHandler, RequestHandler } from 'express';
+import { Prisma } from '@prisma/client';
 import { ZodError } from 'zod';
 
 export class AppError extends Error {
@@ -18,7 +19,16 @@ export const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
     res.status(error.status).json({ message: error.message });
     return;
   }
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === 'P2002') {
+      res.status(409).json({ message: 'A record with these details already exists' });
+      return;
+    }
+    if (error.code === 'P2025') {
+      res.status(404).json({ message: 'The requested record no longer exists' });
+      return;
+    }
+  }
   console.error(error);
   res.status(500).json({ message: 'Something went wrong' });
 };
-

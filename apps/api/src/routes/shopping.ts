@@ -8,7 +8,7 @@ import { asyncHandler } from '../utils/async-handler.js';
 import { AppError } from '../utils/errors.js';
 
 export const shoppingRouter = Router();
-shoppingRouter.use(requireAuth);
+shoppingRouter.use(['/cart', '/wishlist', '/checkout', '/orders'], requireAuth);
 
 const productInclude = {
   category: { select: { name: true, slug: true } },
@@ -159,10 +159,15 @@ shoppingRouter.patch('/orders/:orderNumber/cancel', asyncHandler(async (req, res
     if (found.status !== OrderStatus.PENDING && found.status !== OrderStatus.CONFIRMED) {
       throw new AppError(409, 'This order can no longer be cancelled');
     }
+    const cancelled = await tx.order.updateMany({
+      where: { id: found.id, status: { in: [OrderStatus.PENDING, OrderStatus.CONFIRMED] } },
+      data: { status: OrderStatus.CANCELLED },
+    });
+    if (!cancelled.count) throw new AppError(409, 'This order can no longer be cancelled');
     for (const item of found.items) {
       if (item.productId) await tx.product.update({ where: { id: item.productId }, data: { inventory: { increment: item.quantity } } });
     }
-    return tx.order.update({ where: { id: found.id }, data: { status: OrderStatus.CANCELLED }, include: { items: true } });
+    return tx.order.findUniqueOrThrow({ where: { id: found.id }, include: { items: true } });
   });
   res.json({ order });
 }));

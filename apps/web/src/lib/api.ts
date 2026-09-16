@@ -1,6 +1,9 @@
-export const API_URL = import.meta.env.VITE_API_URL ?? '/api';
+// Production is served by the same Vercel project as the API. Never allow a
+// developer's local VITE_API_URL to be baked into a production storefront.
+export const API_URL = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_URL ?? '/api');
 
 let accessToken: string | null = localStorage.getItem('bn_access_token');
+let refreshPromise: Promise<string | null> | null = null;
 export const hasAccessToken = () => Boolean(accessToken);
 export const setAccessToken = (token: string | null) => {
   accessToken = token;
@@ -12,16 +15,35 @@ export class ApiError extends Error {
   constructor(message: string, public status: number) { super(message); }
 }
 
+async function refreshAccessToken() {
+  if (!refreshPromise) {
+    refreshPromise = fetch(`${API_URL}/auth/refresh`, { method: 'POST', credentials: 'include' })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        const session = await response.json() as { accessToken: string };
+        setAccessToken(session.accessToken);
+        return session.accessToken;
+      })
+      .catch(() => null)
+      .finally(() => { refreshPromise = null; });
+  }
+  return refreshPromise;
+}
+
 async function request<T>(path: string, init: RequestInit, canRefresh: boolean): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body) headers.set('Content-Type', 'application/json');
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
-  const response = await fetch(`${API_URL}${path}`, { ...init, headers, credentials: 'include' });
-  if (response.status === 401 && canRefresh && !path.startsWith('/auth/')) {
-    const refreshed = await fetch(`${API_URL}/auth/refresh`, { method: 'POST', credentials: 'include' });
-    if (refreshed.ok) {
-      const session = await refreshed.json() as { accessToken: string };
-      setAccessToken(session.accessToken);
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, { ...init, headers, credentials: 'include' });
+  } catch {
+    throw new ApiError('Unable to reach BazaarNile. Check your connection and try again.', 0);
+  }
+  const refreshable = !['/auth/login', '/auth/register', '/auth/refresh', '/auth/logout'].includes(path);
+  if (response.status === 401 && canRefresh && refreshable) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) {
       return request<T>(path, init, false);
     }
     setAccessToken(null);
