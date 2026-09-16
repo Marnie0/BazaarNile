@@ -1,6 +1,6 @@
 # BazaarNile
 
-AI-powered multi-vendor marketplace. Phases 1–6 are live: authentication, shopping, inventory-safe ordering with customer tracking, Seller Center analytics, an Admin Panel, personalized product recommendations, and a Gemini-powered conversational shopping assistant.
+AI-powered multi-vendor marketplace. Phases 1–7 are live: authentication, shopping, inventory-safe ordering with customer tracking, Seller Center analytics, an Admin Panel, personalized recommendations, a Gemini shopping assistant, and AI visual product search.
 
 ## Stack
 
@@ -8,7 +8,7 @@ AI-powered multi-vendor marketplace. Phases 1–6 are live: authentication, shop
 - Node.js, Express, TypeScript, Zod
 - PostgreSQL, Prisma ORM
 - JWT access tokens, rotating refresh tokens, bcrypt
-- Gemini 3.6 Flash product and cart summaries
+- Gemini 3.6 Flash summaries and shopping assistant; Gemini 3.5 Flash-Lite visual search
 
 ## Run locally
 
@@ -31,5 +31,5 @@ The storefront runs at `http://localhost:5173` and the API at `http://localhost:
 4. Admin panel, order and user management, moderation, and marketplace analytics (complete)
 5. AI recommendations (complete)
 6. Conversational product assistant (complete)
-7. Visual search
+7. Visual search (complete)
 8. Multi-vendor expansion, notifications, coupons, and advanced analytics

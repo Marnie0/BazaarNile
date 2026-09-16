@@ -11,6 +11,7 @@ const schema = z.object({
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().positive().default(7),
   GEMINI_API_KEY: z.string().min(1).optional(),
   GEMINI_MODEL: z.string().min(1).default('gemini-3.6-flash'),
+  GEMINI_VISION_MODEL: z.string().min(1).default('gemini-3.5-flash-lite'),
   CLIENT_URL: z.string().refine(
     (value) => value.split(',').every((url) => URL.canParse(url.trim())),
     'CLIENT_URL must contain one or more comma-separated URLs',

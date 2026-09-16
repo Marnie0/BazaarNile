@@ -72,6 +72,7 @@ export type Product = { id: string; name: string; slug: string; description: str
 export type Recommendations = { products: Product[]; personalized: boolean; reason: string };
 export type AiSummary = { summary: string };
 export type AssistantResponse = { reply: string; products: Product[]; suggestions: string[] };
+export type VisualSearchResponse = { analysis: string; results: { product: Product; reason: string }[] };
 export type CartItem = { id: string; quantity: number; product: Product };
 export type Cart = { id: string; items: CartItem[]; updatedAt: string };
 export type WishlistItem = { id: string; product: Product; createdAt: string };

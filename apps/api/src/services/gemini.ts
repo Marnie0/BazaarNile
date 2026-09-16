@@ -7,20 +7,24 @@ type GeminiResponse = {
 
 type GenerationOptions = {
   systemInstruction: string;
+  model?: string;
   maxOutputTokens?: number;
   thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high';
   responseMimeType?: 'application/json' | 'text/plain';
   responseSchema?: Record<string, unknown>;
 };
 
-async function generateContent(prompt: string, options: GenerationOptions) {
-  if (!env.GEMINI_API_KEY) throw new AppError(503, 'AI summaries are not configured yet');
+type InlineImage = { mimeType: 'image/jpeg' | 'image/png' | 'image/webp'; data: string };
+
+async function generateContent(prompt: string, options: GenerationOptions, image?: InlineImage) {
+  if (!env.GEMINI_API_KEY) throw new AppError(503, 'AI features are not configured yet');
+  const model = options.model ?? env.GEMINI_MODEL;
   const request = {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: options.systemInstruction }] },
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      contents: [{ role: 'user', parts: [...(image ? [{ inlineData: image }] : []), { text: prompt }] }],
       generationConfig: {
         maxOutputTokens: options.maxOutputTokens ?? 512,
         thinkingConfig: { thinkingLevel: options.thinkingLevel ?? 'minimal' },
@@ -33,24 +37,24 @@ async function generateContent(prompt: string, options: GenerationOptions) {
   let timedOut = false;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`, {
+      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
         ...request, signal: AbortSignal.timeout(18_000),
       });
       if (response.status < 500 || response.status > 599 || attempt === 1) break;
-      console.warn('Gemini transient upstream response', { status: response.status, model: env.GEMINI_MODEL, retrying: true });
+      console.warn('Gemini transient upstream response', { status: response.status, model, retrying: true });
     } catch (error) {
       timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
       if (attempt === 1) break;
-      console.warn('Gemini transient network failure', { timedOut, model: env.GEMINI_MODEL, retrying: true });
+      console.warn('Gemini transient network failure', { timedOut, model, retrying: true });
     }
   }
   if (!response) {
     if (timedOut) throw new AppError(504, 'Gemini took too long to respond. Please try again');
-    throw new AppError(502, 'The AI summary service is unavailable. Please try again');
+    throw new AppError(502, 'The AI service is unavailable. Please try again');
   }
-  if (response.status === 429) throw new AppError(429, 'The AI summary limit was reached. Please try again shortly');
+  if (response.status === 429) throw new AppError(429, 'The AI request limit was reached. Please try again shortly');
   if (!response.ok) {
-    console.warn('Gemini request rejected', { status: response.status, model: env.GEMINI_MODEL });
+    console.warn('Gemini request rejected', { status: response.status, model });
     throw new AppError(502, 'Gemini could not respond right now. Please try again');
   }
   const result = await response.json() as GeminiResponse;
@@ -69,4 +73,9 @@ export async function generateSummary(prompt: string) {
 export async function generateJson<T>(prompt: string, options: Omit<GenerationOptions, 'responseMimeType'>) {
   const text = await generateContent(prompt, { ...options, responseMimeType: 'application/json' });
   try { return JSON.parse(text) as T; } catch { throw new AppError(502, 'Gemini returned an invalid response. Please try again'); }
+}
+
+export async function generateJsonWithImage<T>(prompt: string, image: InlineImage, options: Omit<GenerationOptions, 'responseMimeType'>) {
+  const text = await generateContent(prompt, { ...options, model: env.GEMINI_VISION_MODEL, responseMimeType: 'application/json' }, image);
+  try { return JSON.parse(text) as T; } catch { throw new AppError(502, 'Gemini returned an invalid visual-search response. Please try again'); }
 }

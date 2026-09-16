@@ -1,4 +1,4 @@
-import { Bot, Heart, LogOut, Package, Search, ShieldCheck, ShoppingBag, Store, UserRound } from 'lucide-react';
+import { Bot, Camera, Heart, LogOut, Package, Search, ShieldCheck, ShoppingBag, Store, UserRound } from 'lucide-react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -30,7 +30,7 @@ export function Header() {
   };
 
   return <header className="sticky top-0 z-40 border-b border-ink/8 bg-[#fcfbf8]/90 backdrop-blur-xl">
-    <div className="container-shell flex h-18 items-center gap-6">
+    <div className="container-shell flex h-18 items-center gap-1 sm:gap-3 lg:gap-6">
       <Link to="/" className="font-display text-2xl font-bold tracking-tight">Bazaar<span className="text-nile">Nile</span></Link>
       <nav className="hidden items-center gap-6 text-sm font-medium md:flex">
         <NavLink to="/shop" className={({ isActive }) => isActive ? 'text-nile' : 'hover:text-nile'}>Shop</NavLink>
@@ -41,9 +41,10 @@ export function Header() {
       </form>
       <IconTip label="Wishlist"><Button variant="ghost" size="icon" aria-label="Wishlist" asChild><Link to="/wishlist"><Heart size={20}/></Link></Button></IconTip>
       <IconTip label="AI Shopping Assistant"><Button variant="ghost" size="icon" aria-label="AI Shopping Assistant" asChild><Link to="/assistant"><Bot size={20}/></Link></Button></IconTip>
+      <IconTip label="Visual Search"><Button variant="ghost" size="icon" aria-label="Visual Search" asChild><Link to="/visual-search"><Camera size={20}/></Link></Button></IconTip>
       <IconTip label="Orders" className="hidden sm:inline-flex"><Button variant="ghost" size="icon" aria-label="Orders" asChild><Link to="/orders"><Package size={20}/></Link></Button></IconTip>
       <IconTip label="Seller Center" className="hidden sm:inline-flex"><Button variant="ghost" size="icon" aria-label="Seller Center" asChild><Link to="/seller"><Store size={20}/></Link></Button></IconTip>
-      {user?.role === 'ADMIN' && <IconTip label="Admin Panel"><Button variant="ghost" size="icon" aria-label="Admin Panel" asChild><Link to="/admin"><ShieldCheck size={20}/></Link></Button></IconTip>}
+      {user?.role === 'ADMIN' && <IconTip label="Admin Panel" className="hidden sm:inline-flex"><Button variant="ghost" size="icon" aria-label="Admin Panel" asChild><Link to="/admin"><ShieldCheck size={20}/></Link></Button></IconTip>}
       {user ? <details className="group/account relative">
         <summary className="group/tip relative grid size-10 cursor-pointer list-none place-items-center rounded-full transition hover:bg-nile-light/60 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-nile [&::-webkit-details-marker]:hidden" aria-label="Account menu">
           {user.avatarUrl ? <img src={user.avatarUrl} alt="" className="size-8 rounded-full object-cover"/> : <span className="grid size-8 place-items-center rounded-full bg-nile text-xs font-bold uppercase text-white">{user.displayName.charAt(0)}</span>}
