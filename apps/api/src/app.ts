@@ -8,6 +8,7 @@ import { authRouter } from './routes/auth.js';
 import { catalogRouter } from './routes/catalog.js';
 import { shoppingRouter } from './routes/shopping.js';
 import { sellerRouter } from './routes/seller.js';
+import { adminRouter } from './routes/admin.js';
 import { errorHandler, notFound } from './utils/errors.js';
 
 export const app = express();
@@ -21,6 +22,7 @@ app.use('/api', catalogRouter);
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 app.use('/api', shoppingRouter);
 app.use('/api', sellerRouter);
+app.use('/api', adminRouter);
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.use(notFound);
 app.use(errorHandler);

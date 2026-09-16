@@ -9,7 +9,7 @@ import { AppError } from '../utils/errors.js';
 import { hashToken, signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/tokens.js';
 
 export const authRouter = Router();
-const safeUser = { id: true, email: true, username: true, displayName: true, avatarUrl: true, bio: true, role: true, createdAt: true } as const;
+const safeUser = { id: true, email: true, username: true, displayName: true, avatarUrl: true, bio: true, role: true, status: true, createdAt: true } as const;
 const cookieOptions = () => ({
   httpOnly: true,
   secure: env.NODE_ENV === 'production',
@@ -56,6 +56,7 @@ authRouter.post('/login', asyncHandler(async (req, res) => {
   const data = z.object({ email: z.email().transform((v) => v.toLowerCase()), password: z.string().min(1) }).parse(req.body);
   const found = await prisma.user.findUnique({ where: { email: data.email } });
   if (!found || !(await bcrypt.compare(data.password, found.passwordHash))) throw new AppError(401, 'Invalid email or password');
+  if (found.status === 'SUSPENDED') throw new AppError(403, 'This account has been suspended');
   const user = await prisma.user.findUniqueOrThrow({ where: { id: found.id }, select: safeUser });
   const accessToken = await issueSession(user, res);
   res.json({ user, accessToken });
@@ -67,7 +68,7 @@ authRouter.post('/refresh', asyncHandler(async (req, res) => {
   let payload: ReturnType<typeof verifyRefreshToken>;
   try { payload = verifyRefreshToken(token); } catch { throw new AppError(401, 'Invalid refresh token'); }
   const stored = await prisma.refreshToken.findUnique({ where: { tokenHash: hashToken(token) }, include: { user: true } });
-  if (!stored || stored.revokedAt || stored.expiresAt < new Date() || stored.userId !== payload.sub) {
+  if (!stored || stored.revokedAt || stored.expiresAt < new Date() || stored.userId !== payload.sub || stored.user.status === 'SUSPENDED') {
     throw new AppError(401, 'Refresh token is no longer valid');
   }
   await prisma.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } });

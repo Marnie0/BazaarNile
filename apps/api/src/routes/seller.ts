@@ -85,7 +85,8 @@ sellerRouter.get('/seller/products/:id', asyncHandler(async (req, res) => {
 sellerRouter.post('/seller/products', asyncHandler(async (req, res) => {
   const data = productSchema.parse(req.body);
   if (!(await prisma.category.findUnique({ where: { id: data.categoryId }, select: { id: true } }))) throw new AppError(400, 'Category not found');
-  const product = await prisma.product.create({ data: { ...data, compareAt: data.compareAt === '' || data.compareAt == null ? null : data.compareAt,
+  const product = await prisma.product.create({ data: { ...data, status: data.status === ProductStatus.DRAFT ? ProductStatus.DRAFT : ProductStatus.PENDING,
+    compareAt: data.compareAt === '' || data.compareAt == null ? null : data.compareAt,
     images: data.images?.length ? data.images : [data.imageUrl], slug: await uniqueSlug(data.name), sellerId: req.user!.id }, include: productInclude });
   res.status(201).json({ product });
 }));
@@ -94,7 +95,13 @@ sellerRouter.patch('/seller/products/:id', asyncHandler(async (req, res) => {
   const id = z.string().parse(req.params.id); const existing = await prisma.product.findFirst({ where: { id, sellerId: req.user!.id } });
   if (!existing) throw new AppError(404, 'Product not found'); const data = productSchema.partial().parse(req.body);
   if (data.categoryId && !(await prisma.category.findUnique({ where: { id: data.categoryId }, select: { id: true } }))) throw new AppError(400, 'Category not found');
-  const product = await prisma.product.update({ where: { id }, data: { ...data,
+  const requestedStatus = data.status;
+  const status = requestedStatus === ProductStatus.ACTIVE
+    ? (existing.status === ProductStatus.ACTIVE ? ProductStatus.ACTIVE : ProductStatus.PENDING)
+    : requestedStatus === ProductStatus.REJECTED
+      ? (existing.status === ProductStatus.REJECTED ? ProductStatus.REJECTED : ProductStatus.PENDING)
+      : requestedStatus;
+  const product = await prisma.product.update({ where: { id }, data: { ...data, status,
     ...(data.compareAt !== undefined && { compareAt: data.compareAt === '' || data.compareAt == null ? null : data.compareAt }),
     ...(data.name && data.name !== existing.name && { slug: await uniqueSlug(data.name, id) }),
     ...(data.imageUrl && !data.images && { images: existing.images.length ? existing.images : [data.imageUrl] }) }, include: productInclude });

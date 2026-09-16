@@ -7,7 +7,7 @@ declare global {
   // Express requires declaration merging to add authenticated request state.
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
-    interface Request { user?: { id: string; role: string } }
+    interface Request { user?: { id: string; role: string; status: string } }
   }
 }
 
@@ -16,8 +16,8 @@ export const requireAuth: RequestHandler = async (req, _res, next) => {
   if (scheme !== 'Bearer' || !token) return next(new AppError(401, 'Authentication required'));
   try {
     const payload = verifyAccessToken(token);
-    const user = await prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, role: true } });
-    if (!user) throw new Error('User not found');
+    const user = await prisma.user.findUnique({ where: { id: payload.sub }, select: { id: true, role: true, status: true } });
+    if (!user || user.status === 'SUSPENDED') throw new Error('User unavailable');
     req.user = user;
     next();
   } catch {

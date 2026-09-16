@@ -1,15 +1,16 @@
-import { Heart, Package, Search, ShoppingBag, Store, UserRound } from 'lucide-react';
+import { Heart, Package, Search, ShieldCheck, ShoppingBag, Store, UserRound } from 'lucide-react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '../ui/Button';
-import { api, hasAccessToken, type Cart } from '../../lib/api';
+import { api, hasAccessToken, type Cart, type User } from '../../lib/api';
 
 export function Header() {
   const [search, setSearch] = useState('');
   const navigate = useNavigate();
   useLocation();
   const { data: cartData } = useQuery({ queryKey: ['cart'], queryFn: () => api<{ cart: Cart }>('/cart'), enabled: hasAccessToken(), retry: false });
+  const { data: me } = useQuery({ queryKey: ['me'], queryFn: () => api<{ user: User }>('/auth/me'), enabled: hasAccessToken(), retry: false });
   const count = cartData?.cart.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0;
   return <header className="sticky top-0 z-40 border-b border-ink/8 bg-[#fcfbf8]/90 backdrop-blur-xl">
     <div className="container-shell flex h-18 items-center gap-6">
@@ -24,6 +25,7 @@ export function Header() {
       <Button variant="ghost" size="icon" aria-label="Wishlist" asChild><Link to="/wishlist"><Heart size={20}/></Link></Button>
       <Button variant="ghost" size="icon" aria-label="Orders" className="hidden sm:inline-flex" asChild><Link to="/orders"><Package size={20}/></Link></Button>
       <Button variant="ghost" size="icon" aria-label="Seller Center" className="hidden sm:inline-flex" asChild><Link to="/seller"><Store size={20}/></Link></Button>
+      {me?.user.role === 'ADMIN' && <Button variant="ghost" size="icon" aria-label="Admin Panel" asChild><Link to="/admin"><ShieldCheck size={20}/></Link></Button>}
       <Button variant="ghost" size="icon" aria-label="Account" asChild><Link to="/login"><UserRound size={20}/></Link></Button>
       <Button variant="ghost" size="icon" aria-label={`Cart with ${count} items`} className="relative" asChild><Link to="/cart"><ShoppingBag size={20}/>{count > 0 && <span className="absolute -right-1 -top-1 grid size-5 place-items-center rounded-full bg-gold text-[10px] font-bold text-ink">{count}</span>}</Link></Button>
     </div>
