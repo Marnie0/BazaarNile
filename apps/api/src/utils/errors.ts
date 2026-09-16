@@ -28,6 +28,10 @@ export const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
       res.status(404).json({ message: 'The requested record no longer exists' });
       return;
     }
+    if (error.code === 'P2034') {
+      res.status(409).json({ message: 'This request conflicted with another update. Please try again' });
+      return;
+    }
   }
   console.error(error);
   res.status(500).json({ message: 'Something went wrong' });

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '../components/ui/Button';
@@ -6,6 +6,7 @@ import { api, setAccessToken, type User } from '../lib/api';
 
 export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const navigate = useNavigate(); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
+  useEffect(() => { setError(''); setBusy(false); }, [mode]);
   const queryClient = useQueryClient();
   const submit = async (e: FormEvent<HTMLFormElement>) => { e.preventDefault(); setBusy(true); setError(''); const values = Object.fromEntries(new FormData(e.currentTarget)); try { const result = await api<{ user: User; accessToken: string }>(`/auth/${mode}`, { method: 'POST', body: JSON.stringify(values) }); setAccessToken(result.accessToken); await queryClient.invalidateQueries(); navigate('/'); } catch (err) { setError(err instanceof Error ? err.message : 'Unable to continue'); } finally { setBusy(false); } };
   const register = mode === 'register';

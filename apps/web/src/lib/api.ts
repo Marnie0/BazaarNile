@@ -49,8 +49,8 @@ async function request<T>(path: string, init: RequestInit, canRefresh: boolean):
     setAccessToken(null);
   }
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Request failed' }));
-    throw new ApiError(error.message ?? 'Request failed', response.status);
+    const error = await response.json().catch(() => ({ message: 'Request failed' })) as { message?: string; issues?: { message?: string }[] };
+    throw new ApiError(error.issues?.[0]?.message ?? error.message ?? 'Request failed', response.status);
   }
   return response.status === 204 ? undefined as T : response.json();
 }
@@ -61,7 +61,7 @@ export function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export type User = { id?: string; email?: string; username: string; displayName: string; avatarUrl?: string; bio?: string; role: 'CUSTOMER' | 'SELLER' | 'ADMIN'; status?: 'ACTIVE' | 'SUSPENDED'; createdAt: string };
 export type Category = { id: string; name: string; slug: string; description?: string; imageUrl?: string; _count?: { products: number } };
-export type Product = { id: string; name: string; slug: string; description: string; price: string; compareAt?: string; imageUrl: string; images: string[]; inventory: number; featured: boolean; category: Category; seller: Pick<User, 'username' | 'displayName' | 'avatarUrl' | 'bio'> };
+export type Product = { id: string; name: string; slug: string; description: string; price: string; compareAt?: string; imageUrl: string; images: string[]; inventory: number; featured: boolean; status?: ProductStatus; category: Category; seller: Pick<User, 'username' | 'displayName' | 'avatarUrl' | 'bio'> };
 export type CartItem = { id: string; quantity: number; product: Product };
 export type Cart = { id: string; items: CartItem[]; updatedAt: string };
 export type WishlistItem = { id: string; product: Product; createdAt: string };
