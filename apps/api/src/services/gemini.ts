@@ -15,31 +15,44 @@ type GenerationOptions = {
 
 async function generateContent(prompt: string, options: GenerationOptions) {
   if (!env.GEMINI_API_KEY) throw new AppError(503, 'AI summaries are not configured yet');
-  let response: Response;
-  try {
-    response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
-      signal: AbortSignal.timeout(20_000),
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: options.systemInstruction }] },
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: {
-          maxOutputTokens: options.maxOutputTokens ?? 512,
-          thinkingConfig: { thinkingLevel: options.thinkingLevel ?? 'minimal' },
-          ...(options.responseMimeType && { responseMimeType: options.responseMimeType }),
-          ...(options.responseSchema && { responseSchema: options.responseSchema }),
-        },
-      }),
-    });
-  } catch (error) {
-    if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
-      throw new AppError(504, 'The AI summary took too long. Please try again');
+  const request = {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: options.systemInstruction }] },
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: {
+        maxOutputTokens: options.maxOutputTokens ?? 512,
+        thinkingConfig: { thinkingLevel: options.thinkingLevel ?? 'minimal' },
+        ...(options.responseMimeType && { responseMimeType: options.responseMimeType }),
+        ...(options.responseSchema && { responseSchema: options.responseSchema }),
+      },
+    }),
+  } satisfies RequestInit;
+  let response: Response | undefined;
+  let timedOut = false;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`, {
+        ...request, signal: AbortSignal.timeout(18_000),
+      });
+      if (response.status < 500 || response.status > 599 || attempt === 1) break;
+      console.warn('Gemini transient upstream response', { status: response.status, model: env.GEMINI_MODEL, retrying: true });
+    } catch (error) {
+      timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+      if (attempt === 1) break;
+      console.warn('Gemini transient network failure', { timedOut, model: env.GEMINI_MODEL, retrying: true });
     }
+  }
+  if (!response) {
+    if (timedOut) throw new AppError(504, 'Gemini took too long to respond. Please try again');
     throw new AppError(502, 'The AI summary service is unavailable. Please try again');
   }
   if (response.status === 429) throw new AppError(429, 'The AI summary limit was reached. Please try again shortly');
-  if (!response.ok) throw new AppError(502, 'Gemini could not create a summary right now');
+  if (!response.ok) {
+    console.warn('Gemini request rejected', { status: response.status, model: env.GEMINI_MODEL });
+    throw new AppError(502, 'Gemini could not respond right now. Please try again');
+  }
   const result = await response.json() as GeminiResponse;
   const text = result.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('').trim();
   if (!text) throw new AppError(502, 'Gemini returned an empty response. Please try again');
