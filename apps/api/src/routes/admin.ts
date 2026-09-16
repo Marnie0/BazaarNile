@@ -23,7 +23,7 @@ adminRouter.get('/admin/overview', asyncHandler(async (_req, res) => {
   const monthAgo = new Date();
   monthAgo.setDate(monthAgo.getDate() - 30);
 
-  const [totalUsers, newUsers, sellers, suspendedUsers, totalProducts, activeProducts, pendingProducts, orders, recentUsers] = await prisma.$transaction([
+  const [totalUsers, newUsers, sellers, suspendedUsers, totalProducts, activeProducts, pendingProducts, totalOrders, openOrders, orders, recentUsers] = await prisma.$transaction([
     prisma.user.count(),
     prisma.user.count({ where: { createdAt: { gte: monthAgo } } }),
     prisma.user.count({ where: { role: Role.SELLER } }),
@@ -31,6 +31,8 @@ adminRouter.get('/admin/overview', asyncHandler(async (_req, res) => {
     prisma.product.count(),
     prisma.product.count({ where: { status: ProductStatus.ACTIVE } }),
     prisma.product.count({ where: { status: ProductStatus.PENDING } }),
+    prisma.order.count(),
+    prisma.order.count({ where: { status: { notIn: [OrderStatus.DELIVERED, OrderStatus.CANCELLED] } } }),
     prisma.order.findMany({
       where: { status: { not: OrderStatus.CANCELLED } },
       select: { id: true, subtotal: true, createdAt: true, items: { select: { sellerId: true, lineTotal: true } } },
@@ -70,11 +72,69 @@ adminRouter.get('/admin/overview', asyncHandler(async (_req, res) => {
   res.json({
     metrics: {
       totalUsers, newUsers, sellers, suspendedUsers, totalProducts, activeProducts, pendingProducts,
-      totalOrders: orders.length, grossMerchandiseValue: grossMerchandiseValue.toString(),
+      totalOrders, openOrders, grossMerchandiseValue: grossMerchandiseValue.toString(),
       averageOrderValue: orders.length ? grossMerchandiseValue.div(orders.length).toFixed(2) : '0',
     },
     chart, topSellers, recentUsers,
   });
+}));
+
+const adminOrderInclude = {
+  user: { select: { id: true, displayName: true, username: true, email: true } },
+  items: { orderBy: { createdAt: 'asc' as const } },
+} as const;
+
+adminRouter.get('/admin/orders', asyncHandler(async (req, res) => {
+  const query = z.object({
+    search: z.string().trim().max(100).optional(), status: z.enum(OrderStatus).optional(),
+    page: z.coerce.number().int().positive().default(1), limit: z.coerce.number().int().min(1).max(50).default(20),
+  }).parse(req.query);
+  const where: Prisma.OrderWhereInput = {
+    ...(query.status && { status: query.status }),
+    ...(query.search && { OR: [
+      { orderNumber: { contains: query.search, mode: 'insensitive' } },
+      { shippingName: { contains: query.search, mode: 'insensitive' } },
+      { shippingPhone: { contains: query.search, mode: 'insensitive' } },
+      { user: { displayName: { contains: query.search, mode: 'insensitive' } } },
+      { user: { email: { contains: query.search, mode: 'insensitive' } } },
+    ] }),
+  };
+  const [orders, total] = await prisma.$transaction([
+    prisma.order.findMany({ where, orderBy: { createdAt: 'desc' }, skip: (query.page - 1) * query.limit, take: query.limit, include: adminOrderInclude }),
+    prisma.order.count({ where }),
+  ]);
+  res.json({ orders, pagination: { page: query.page, limit: query.limit, total, pages: Math.ceil(total / query.limit) } });
+}));
+
+const allowedOrderTransitions: Record<OrderStatus, OrderStatus[]> = {
+  PENDING: [OrderStatus.CONFIRMED, OrderStatus.PROCESSING, OrderStatus.CANCELLED],
+  CONFIRMED: [OrderStatus.PROCESSING, OrderStatus.CANCELLED],
+  PROCESSING: [OrderStatus.SHIPPED, OrderStatus.CANCELLED],
+  SHIPPED: [OrderStatus.DELIVERED, OrderStatus.CANCELLED],
+  DELIVERED: [],
+  CANCELLED: [],
+};
+
+adminRouter.patch('/admin/orders/:orderNumber/status', asyncHandler(async (req, res) => {
+  const orderNumber = z.string().trim().min(1).parse(req.params.orderNumber);
+  const { status } = z.object({ status: z.enum(OrderStatus) }).parse(req.body);
+  const order = await prisma.$transaction(async (tx) => {
+    const found = await tx.order.findUnique({ where: { orderNumber }, include: adminOrderInclude });
+    if (!found) throw new AppError(404, 'Order not found');
+    if (found.status === status) return found;
+    if (!allowedOrderTransitions[found.status].includes(status)) {
+      throw new AppError(409, `Order cannot move from ${found.status.toLowerCase()} to ${status.toLowerCase()}`);
+    }
+    const updated = await tx.order.updateMany({ where: { id: found.id, status: found.status }, data: { status } });
+    if (!updated.count) throw new AppError(409, 'The order status changed. Refresh and try again');
+    if (status === OrderStatus.CANCELLED) {
+      for (const item of found.items) {
+        if (item.productId) await tx.product.updateMany({ where: { id: item.productId }, data: { inventory: { increment: item.quantity } } });
+      }
+    }
+    return tx.order.findUniqueOrThrow({ where: { id: found.id }, include: adminOrderInclude });
+  });
+  res.json({ order });
 }));
 
 adminRouter.get('/admin/users', asyncHandler(async (req, res) => {

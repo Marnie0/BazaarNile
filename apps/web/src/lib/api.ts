@@ -66,8 +66,9 @@ export type CartItem = { id: string; quantity: number; product: Product };
 export type Cart = { id: string; items: CartItem[]; updatedAt: string };
 export type WishlistItem = { id: string; product: Product; createdAt: string };
 export type OrderItem = { id: string; productId?: string; productName: string; productSlug: string; imageUrl: string; unitPrice: string; quantity: number; lineTotal: string };
+export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED';
 export type Order = {
-  id: string; orderNumber: string; status: 'PENDING' | 'CONFIRMED' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED';
+  id: string; orderNumber: string; status: OrderStatus;
   paymentMethod: 'CASH_ON_DELIVERY'; paymentStatus: string; subtotal: string; shippingFee: string; total: string;
   shippingName: string; shippingPhone: string; shippingAddress: string; shippingCity: string; shippingRegion: string;
   notes?: string; items: OrderItem[]; createdAt: string; updatedAt: string;
@@ -82,8 +83,9 @@ export type SellerOverview = {
 };
 export type AdminUser = User & { id: string; email: string; status: 'ACTIVE' | 'SUSPENDED'; updatedAt: string; _count: { products: number; orders: number } };
 export type AdminProduct = SellerProduct & { seller: Pick<AdminUser, 'id' | 'username' | 'displayName' | 'avatarUrl'> };
+export type AdminOrder = Order & { user: Pick<AdminUser, 'id' | 'username' | 'displayName' | 'email'> };
 export type AdminOverview = {
-  metrics: { totalUsers: number; newUsers: number; sellers: number; suspendedUsers: number; totalProducts: number; activeProducts: number; pendingProducts: number; totalOrders: number; grossMerchandiseValue: string; averageOrderValue: string };
+  metrics: { totalUsers: number; newUsers: number; sellers: number; suspendedUsers: number; totalProducts: number; activeProducts: number; pendingProducts: number; totalOrders: number; openOrders: number; grossMerchandiseValue: string; averageOrderValue: string };
   chart: { date: string; revenue: string; orders: number }[];
   topSellers: { id: string; displayName: string; username: string; avatarUrl?: string; revenue: string; orders: number }[];
   recentUsers: AdminUser[];
