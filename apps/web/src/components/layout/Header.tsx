@@ -1,4 +1,4 @@
-import { Heart, LogOut, Package, Search, ShieldCheck, ShoppingBag, Store, UserRound } from 'lucide-react';
+import { Bot, Heart, LogOut, Package, Search, ShieldCheck, ShoppingBag, Store, UserRound } from 'lucide-react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -40,6 +40,7 @@ export function Header() {
         <Search size={17} className="text-ink/45"/><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search the bazaar" aria-label="Search products" className="w-full bg-transparent px-3 py-2.5 text-sm outline-none"/>
       </form>
       <IconTip label="Wishlist"><Button variant="ghost" size="icon" aria-label="Wishlist" asChild><Link to="/wishlist"><Heart size={20}/></Link></Button></IconTip>
+      <IconTip label="AI Shopping Assistant"><Button variant="ghost" size="icon" aria-label="AI Shopping Assistant" asChild><Link to="/assistant"><Bot size={20}/></Link></Button></IconTip>
       <IconTip label="Orders" className="hidden sm:inline-flex"><Button variant="ghost" size="icon" aria-label="Orders" asChild><Link to="/orders"><Package size={20}/></Link></Button></IconTip>
       <IconTip label="Seller Center" className="hidden sm:inline-flex"><Button variant="ghost" size="icon" aria-label="Seller Center" asChild><Link to="/seller"><Store size={20}/></Link></Button></IconTip>
       {user?.role === 'ADMIN' && <IconTip label="Admin Panel"><Button variant="ghost" size="icon" aria-label="Admin Panel" asChild><Link to="/admin"><ShieldCheck size={20}/></Link></Button></IconTip>}
