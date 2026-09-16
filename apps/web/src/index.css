@@ -23,8 +23,8 @@ img { display: block; max-width: 100%; }
 .text-balance { text-wrap: balance; }
 
 /* The Market Spread — the single expressive moment on the homepage. */
-.market-spread { background: #eadcc3; border-bottom: 1px solid rgba(52,43,37,.14); }
-.market-spread__stage { position: relative; width: 100%; aspect-ratio: 1672 / 941; overflow: hidden; isolation: isolate; }
+.market-spread { height: calc(100svh - 4.5rem); background: #eadcc3; border-bottom: 1px solid rgba(52,43,37,.14); }
+.market-spread__stage { position: relative; width: 100%; height: 100%; overflow: hidden; isolation: isolate; }
 .market-spread__photo { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; object-fit: cover; }
 .market-spread__title { position: absolute; inset: 0; z-index: 1; margin: 0; color: #342b25; font-size: clamp(5.4rem, 9.8vw, 10.25rem); font-weight: 400; line-height: .95; letter-spacing: -.04em; }
 .market-spread__title span { position: absolute; white-space: nowrap; }
@@ -101,11 +101,11 @@ img { display: block; max-width: 100%; }
 
 @media (max-width: 640px) {
   .container-shell { width: min(100% - 1.25rem, 1180px); }
-  .market-spread { padding: 1.75rem .625rem 2rem; }
+  .market-spread { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: calc(100svh - 4.5rem); padding: 1.5rem .625rem 1rem; }
   .market-spread__copy-mobile { display: block; padding: .5rem .25rem 1.25rem; }
   .market-spread__copy-mobile h1 { margin: 0; font-size: clamp(3.35rem, 15vw, 5rem); font-weight: 500; line-height: .87; letter-spacing: -.045em; }
   .market-spread__copy-mobile p { margin: 1rem 0 0; color: rgba(52,43,37,.68); font-size: .92rem; }
-  .market-spread__stage { aspect-ratio: 16 / 7; min-height: 0; }
+  .market-spread__stage { width: 100%; height: 100%; min-height: 0; }
   .market-spread__photo { object-position: center 46%; }
   .market-spread__title, .market-spread__overlap, .market-spread__caption { display: none; }
   .market-spread__cta-mobile { display: flex; width: 100%; margin-top: .75rem; }
