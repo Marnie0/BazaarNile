@@ -46,9 +46,8 @@ export function HomePage() {
       </div>
       <div className="market-mosaic">
         {categoryData?.categories.slice(0, 4).map((category, index) => <Link key={category.id} to={`/shop?category=${category.slug}`} className={`market-mosaic-card ${categoryTones[index]}`}>
-          {category.imageUrl && <img src={category.imageUrl} alt="" loading="lazy"/>}
-          <span className="market-mosaic-card__veil" aria-hidden="true"/>
-          <span className="market-mosaic-card__content"><strong className="font-display">{category.name}</strong><small>{category._count?.products ?? 0} products</small></span>
+          <span className="market-mosaic-card__image">{category.imageUrl && <img src={category.imageUrl} alt="" loading="lazy"/>}</span>
+          <span className="market-mosaic-card__content"><strong>{category.name}</strong><small>{category._count?.products ?? 0} products</small></span>
         </Link>)}
       </div>
     </section>

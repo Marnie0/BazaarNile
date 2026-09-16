@@ -45,21 +45,21 @@ img { display: block; max-width: 100%; }
 .quiet-link { flex: none; color: #244e5a; font-size: .95rem; font-weight: 600; text-decoration-thickness: 1px; text-underline-offset: .35rem; }
 .quiet-link:hover { color: #a44732; }
 
-.market-mosaic { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: 16rem 13rem; gap: 1rem; }
-.market-mosaic-card { position: relative; overflow: hidden; min-height: 13rem; color: #fffaf1; background: #342b25; text-decoration: none; }
-.market-mosaic-card:nth-child(1) { grid-column: span 7; grid-row: span 2; border-radius: 0 5rem 0 0; }
-.market-mosaic-card:nth-child(2) { grid-column: span 5; border-radius: 0 0 0 3.5rem; }
-.market-mosaic-card:nth-child(3), .market-mosaic-card:nth-child(4) { grid-column: span 3; }
-.market-mosaic-card:nth-child(4) { grid-column: span 2; border-radius: 0 0 2.5rem 0; }
-.market-mosaic-card img { width: 100%; height: 100%; object-fit: cover; transition: filter .25s ease; }
-.market-mosaic-card__veil { position: absolute; inset: 0; background: rgba(38,31,27,.44); }
-.market-mosaic-card--clay .market-mosaic-card__veil { background: rgba(112,42,26,.46); }
-.market-mosaic-card--nile .market-mosaic-card__veil { background: rgba(18,58,69,.52); }
-.market-mosaic-card--saffron .market-mosaic-card__veil { background: rgba(78,54,9,.44); }
-.market-mosaic-card__content { position: absolute; inset: auto 0 0; display: flex; align-items: end; justify-content: space-between; gap: 1rem; padding: clamp(1.15rem, 2.5vw, 2rem); }
-.market-mosaic-card__content strong { font-size: clamp(1.65rem, 3vw, 3.1rem); font-weight: 500; line-height: 1; }
-.market-mosaic-card__content small { font-family: var(--font-sans); font-size: .8rem; font-weight: 600; white-space: nowrap; }
-.market-mosaic-card:hover img { filter: saturate(.8) brightness(1.05); }
+.market-mosaic { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: .875rem; }
+.market-mosaic-card { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-width: 0; height: 21rem; overflow: hidden; border-top: 4px solid #a44732; background: #eee2cf; color: #342b25; text-decoration: none; }
+.market-mosaic-card:nth-child(1) { grid-column: span 4; }
+.market-mosaic-card:nth-child(2) { grid-column: span 3; }
+.market-mosaic-card:nth-child(3) { grid-column: span 2; }
+.market-mosaic-card:nth-child(4) { grid-column: span 3; }
+.market-mosaic-card--nile { border-top-color: #244e5a; }
+.market-mosaic-card--saffron { border-top-color: #d5a62e; }
+.market-mosaic-card--ink { border-top-color: #342b25; }
+.market-mosaic-card__image { display: block; min-height: 0; overflow: hidden; background: #ded1bc; }
+.market-mosaic-card__image img { width: 100%; height: 100%; object-fit: cover; transition: transform .25s ease, filter .25s ease; }
+.market-mosaic-card__content { display: grid; gap: .2rem; min-height: 5.25rem; padding: 1rem 1.1rem 1.05rem; border-inline: 1px solid rgba(52,43,37,.12); border-bottom: 1px solid rgba(52,43,37,.12); background: #fbf8f1; }
+.market-mosaic-card__content strong { overflow: hidden; font-size: clamp(1rem, 1.35vw, 1.25rem); font-weight: 600; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.market-mosaic-card__content small { color: rgba(52,43,37,.62); font-size: .8rem; font-weight: 500; }
+.market-mosaic-card:hover .market-mosaic-card__image img { filter: saturate(.9); transform: scale(1.015); }
 
 .product-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: clamp(1rem, 2vw, 1.75rem); }
 .product-card { min-width: 0; }
@@ -92,7 +92,8 @@ img { display: block; max-width: 100%; }
 @media (max-width: 960px) {
   .market-spread__title { font-size: 9.6vw; }
   .market-spread__caption { left: 32%; }
-  .market-mosaic { grid-template-rows: 13rem 11rem; }
+  .market-mosaic { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .market-mosaic-card, .market-mosaic-card:nth-child(n) { grid-column: span 1; height: 18rem; }
   .product-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 3rem; }
   .market-promises { grid-template-columns: 1fr; }
   .market-promises > div + div { border-left: 0; border-top: 1px solid rgba(52,43,37,.16); }
@@ -113,14 +114,12 @@ img { display: block; max-width: 100%; }
   .home-section__heading h2 { font-size: 2.65rem; }
   .home-section__heading p { max-width: 18rem; font-size: .92rem; }
   .quiet-link { padding-top: .5rem; }
-  .market-mosaic { grid-template-columns: 1.25fr .75fr; grid-template-rows: 15rem 10rem 10rem; gap: .65rem; }
-  .market-mosaic-card:nth-child(1) { grid-column: 1 / -1; grid-row: auto; border-radius: 0 3.5rem 0 0; }
-  .market-mosaic-card:nth-child(2) { grid-column: 1 / 2; grid-row: span 2; border-radius: 0 0 0 2.5rem; }
-  .market-mosaic-card:nth-child(3), .market-mosaic-card:nth-child(4) { grid-column: 2 / 3; }
-  .market-mosaic-card:nth-child(4) { border-radius: 0 0 1.5rem 0; }
-  .market-mosaic-card__content { align-items: start; flex-direction: column; gap: .3rem; padding: 1rem; }
-  .market-mosaic-card__content strong { font-size: 1.55rem; }
-  .market-mosaic-card__content small { font-size: .7rem; }
+  .market-mosaic { display: flex; gap: .75rem; margin-right: -.625rem; padding-right: .625rem; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+  .market-mosaic::-webkit-scrollbar { display: none; }
+  .market-mosaic-card, .market-mosaic-card:nth-child(n) { flex: 0 0 min(78vw, 20rem); height: 17rem; scroll-snap-align: start; }
+  .market-mosaic-card__content { min-height: 4.8rem; padding: .9rem 1rem; }
+  .market-mosaic-card__content strong { font-size: 1.05rem; }
+  .market-mosaic-card__content small { font-size: .78rem; }
   .product-grid { gap: 2.5rem .7rem; }
   .product-card__body { padding-top: .75rem; }
   .product-card__category { font-size: .68rem; }
