@@ -1,4 +1,4 @@
-import { OrderStatus, Prisma, ProductStatus, Role, UserStatus } from '@prisma/client';
+import { CouponType, NotificationType, OrderStatus, Prisma, ProductStatus, Role, UserStatus } from '@prisma/client';
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
@@ -35,12 +35,16 @@ adminRouter.get('/admin/overview', asyncHandler(async (_req, res) => {
     prisma.order.count({ where: { status: { notIn: [OrderStatus.DELIVERED, OrderStatus.CANCELLED] } } }),
     prisma.order.findMany({
       where: { status: { not: OrderStatus.CANCELLED } },
-      select: { id: true, subtotal: true, createdAt: true, items: { select: { sellerId: true, lineTotal: true } } },
+      select: { id: true, userId: true, subtotal: true, discount: true, createdAt: true, items: { select: { sellerId: true, lineTotal: true, quantity: true, product: { select: { category: { select: { name: true } } } } } } },
     }),
     prisma.user.findMany({ orderBy: { createdAt: 'desc' }, take: 6, select: safeUser }),
   ]);
 
   const grossMerchandiseValue = orders.reduce((sum, order) => sum.plus(order.subtotal), new Prisma.Decimal(0));
+  const totalDiscounts = orders.reduce((sum, order) => sum.plus(order.discount), new Prisma.Decimal(0));
+  const customerOrders = new Map<string, number>();
+  orders.forEach((order) => customerOrders.set(order.userId, (customerOrders.get(order.userId) ?? 0) + 1));
+  const repeatCustomerRate = customerOrders.size ? [...customerOrders.values()].filter((count) => count > 1).length / customerOrders.size * 100 : 0;
   const chart = Array.from({ length: 14 }, (_, offset) => {
     const day = new Date(since);
     day.setDate(since.getDate() + offset);
@@ -60,7 +64,7 @@ adminRouter.get('/admin/overview', asyncHandler(async (_req, res) => {
       const current = sellerSales.get(item.sellerId) ?? { revenue: new Prisma.Decimal(0), orders: new Set<string>(), units: 0 };
       current.revenue = current.revenue.plus(item.lineTotal);
       current.orders.add(order.id);
-      current.units += 1;
+      current.units += item.quantity;
       sellerSales.set(item.sellerId, current);
     }
   }
@@ -68,14 +72,23 @@ adminRouter.get('/admin/overview', asyncHandler(async (_req, res) => {
   const sellerProfiles = await prisma.user.findMany({ where: { id: { in: topSellerIds } }, select: { id: true, displayName: true, username: true, avatarUrl: true } });
   const profileMap = new Map(sellerProfiles.map((profile) => [profile.id, profile]));
   const topSellers = topSellerIds.map((id) => ({ ...profileMap.get(id), revenue: sellerSales.get(id)!.revenue.toString(), orders: sellerSales.get(id)!.orders.size }));
+  const categoryMap = new Map<string, { revenue: Prisma.Decimal; units: number }>();
+  for (const order of orders) for (const item of order.items) {
+    const name = item.product?.category.name ?? 'Archived products'; const current = categoryMap.get(name) ?? { revenue: new Prisma.Decimal(0), units: 0 };
+    current.revenue = current.revenue.plus(item.lineTotal); current.units += item.quantity; categoryMap.set(name, current);
+  }
+  const categorySales = [...categoryMap.entries()].map(([name, value]) => ({ name, revenue: value.revenue.toString(), units: value.units }))
+    .sort((a, b) => Number(b.revenue) - Number(a.revenue)).slice(0, 5);
 
   res.json({
     metrics: {
       totalUsers, newUsers, sellers, suspendedUsers, totalProducts, activeProducts, pendingProducts,
       totalOrders, openOrders, grossMerchandiseValue: grossMerchandiseValue.toString(),
       averageOrderValue: orders.length ? grossMerchandiseValue.div(orders.length).toFixed(2) : '0',
+      totalDiscounts: totalDiscounts.toString(), couponOrders: orders.filter((order) => order.discount.greaterThan(0)).length,
+      repeatCustomerRate: repeatCustomerRate.toFixed(1),
     },
-    chart, topSellers, recentUsers,
+    chart, topSellers, categorySales, recentUsers,
   });
 }));
 
@@ -131,10 +144,50 @@ adminRouter.patch('/admin/orders/:orderNumber/status', asyncHandler(async (req, 
       for (const item of found.items) {
         if (item.productId) await tx.product.updateMany({ where: { id: item.productId }, data: { inventory: { increment: item.quantity } } });
       }
+      const usage = await tx.couponUsage.findUnique({ where: { orderId: found.id } });
+      if (usage) {
+        await tx.couponUsage.delete({ where: { id: usage.id } });
+        await tx.coupon.update({ where: { id: usage.couponId }, data: { usedCount: { decrement: 1 } } });
+      }
     }
+    await tx.notification.create({ data: {
+      userId: found.userId, type: NotificationType.ORDER,
+      title: status === OrderStatus.CANCELLED ? 'Order cancelled' : 'Order status updated',
+      message: `${found.orderNumber} is now ${status.toLowerCase()}.`, link: '/orders',
+    } });
     return tx.order.findUniqueOrThrow({ where: { id: found.id }, include: adminOrderInclude });
   });
   res.json({ order });
+}));
+
+const couponSchema = z.object({
+  code: z.string().trim().min(3).max(40).regex(/^[A-Za-z0-9_-]+$/).transform((value) => value.toUpperCase()),
+  type: z.enum(CouponType),
+  value: z.coerce.number().positive().max(99_999_999),
+  minOrderAmount: z.coerce.number().min(0).max(99_999_999).default(0),
+  maxDiscount: z.union([z.coerce.number().positive().max(99_999_999), z.null()]).optional(),
+  usageLimit: z.union([z.coerce.number().int().positive().max(1_000_000), z.null()]).optional(),
+  startsAt: z.coerce.date().optional(), expiresAt: z.coerce.date().nullable().optional(), active: z.boolean().default(true),
+}).refine((value) => value.type !== CouponType.PERCENTAGE || value.value <= 100, { message: 'Percentage coupons cannot exceed 100%', path: ['value'] })
+  .refine((value) => !value.expiresAt || !value.startsAt || value.expiresAt > value.startsAt, { message: 'Expiry must be after the start date', path: ['expiresAt'] });
+
+adminRouter.get('/admin/coupons', asyncHandler(async (_req, res) => {
+  const coupons = await prisma.coupon.findMany({ orderBy: { createdAt: 'desc' }, include: { _count: { select: { usages: true, orders: true } } } });
+  res.json({ coupons });
+}));
+
+adminRouter.post('/admin/coupons', asyncHandler(async (req, res) => {
+  const data = couponSchema.parse(req.body);
+  const coupon = await prisma.coupon.create({ data: { ...data, maxDiscount: data.maxDiscount ?? null, usageLimit: data.usageLimit ?? null, expiresAt: data.expiresAt ?? null } });
+  res.status(201).json({ coupon });
+}));
+
+adminRouter.patch('/admin/coupons/:id', asyncHandler(async (req, res) => {
+  const id = z.string().min(1).parse(req.params.id);
+  const data = couponSchema.partial().parse(req.body);
+  if (data.type === CouponType.PERCENTAGE && data.value !== undefined && data.value > 100) throw new AppError(400, 'Percentage coupons cannot exceed 100%');
+  const coupon = await prisma.coupon.update({ where: { id }, data });
+  res.json({ coupon });
 }));
 
 adminRouter.get('/admin/users', asyncHandler(async (req, res) => {

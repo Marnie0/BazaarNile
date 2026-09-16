@@ -1,9 +1,9 @@
-import { Bot, Camera, Heart, LogOut, Package, Search, ShieldCheck, ShoppingBag, Store, UserRound } from 'lucide-react';
+import { Bell, Bot, Camera, Heart, LogOut, Package, Search, ShieldCheck, ShoppingBag, Store, UserRound } from 'lucide-react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../ui/Button';
-import { api, hasAccessToken, setAccessToken, subscribeToAccessToken, type Cart, type User } from '../../lib/api';
+import { api, hasAccessToken, setAccessToken, subscribeToAccessToken, type Cart, type Notification, type User } from '../../lib/api';
 
 function IconTip({ label, children, className = '', align = 'center' }: { label: string; children: ReactNode; className?: string; align?: 'center' | 'right' }) {
   return <span className={`group/tip relative ${className}`}>
@@ -19,6 +19,7 @@ export function Header() {
   const authenticated = useSyncExternalStore(subscribeToAccessToken, hasAccessToken, hasAccessToken);
   const { data: cartData } = useQuery({ queryKey: ['cart'], queryFn: () => api<{ cart: Cart }>('/cart'), enabled: authenticated, retry: false });
   const { data: me } = useQuery({ queryKey: ['me'], queryFn: () => api<{ user: User }>('/auth/me'), enabled: authenticated, retry: false });
+  const { data: notificationData } = useQuery({ queryKey: ['notifications'], queryFn: () => api<{ notifications: Notification[]; unreadCount: number }>('/notifications?limit=8'), enabled: authenticated, retry: false, refetchInterval: 30_000 });
   const user = authenticated ? me?.user : undefined;
   const count = authenticated ? cartData?.cart.items.reduce((sum, item) => sum + item.quantity, 0) ?? 0 : 0;
   const logout = async () => {
@@ -39,9 +40,10 @@ export function Header() {
       <form className="ml-auto hidden max-w-sm flex-1 items-center rounded-full border border-ink/10 bg-white px-4 sm:flex" onSubmit={(event) => { event.preventDefault(); navigate(`/shop?search=${encodeURIComponent(search)}`); }}>
         <Search size={17} className="text-ink/45"/><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search the bazaar" aria-label="Search products" className="w-full bg-transparent px-3 py-2.5 text-sm outline-none"/>
       </form>
-      <IconTip label="Wishlist"><Button variant="ghost" size="icon" aria-label="Wishlist" asChild><Link to="/wishlist"><Heart size={20}/></Link></Button></IconTip>
-      <IconTip label="AI Shopping Assistant"><Button variant="ghost" size="icon" aria-label="AI Shopping Assistant" asChild><Link to="/assistant"><Bot size={20}/></Link></Button></IconTip>
+      <IconTip label="Wishlist" className="hidden sm:inline-flex"><Button variant="ghost" size="icon" aria-label="Wishlist" asChild><Link to="/wishlist"><Heart size={20}/></Link></Button></IconTip>
+      <IconTip label="AI Shopping Assistant" className="hidden sm:inline-flex"><Button variant="ghost" size="icon" aria-label="AI Shopping Assistant" asChild><Link to="/assistant"><Bot size={20}/></Link></Button></IconTip>
       <IconTip label="Visual Search"><Button variant="ghost" size="icon" aria-label="Visual Search" asChild><Link to="/visual-search"><Camera size={20}/></Link></Button></IconTip>
+      <IconTip label={notificationData?.unreadCount ? `${notificationData.unreadCount} unread notifications` : 'Notifications'}><Button variant="ghost" size="icon" aria-label="Notifications" className="relative" asChild><Link to="/notifications"><Bell size={20}/>{Boolean(notificationData?.unreadCount) && <span className="absolute right-0 top-0 grid min-w-4 rounded-full bg-gold px-1 text-[9px] font-bold leading-4 text-ink">{Math.min(notificationData!.unreadCount, 99)}</span>}</Link></Button></IconTip>
       <IconTip label="Orders" className="hidden sm:inline-flex"><Button variant="ghost" size="icon" aria-label="Orders" asChild><Link to="/orders"><Package size={20}/></Link></Button></IconTip>
       <IconTip label="Seller Center" className="hidden sm:inline-flex"><Button variant="ghost" size="icon" aria-label="Seller Center" asChild><Link to="/seller"><Store size={20}/></Link></Button></IconTip>
       {user?.role === 'ADMIN' && <IconTip label="Admin Panel" className="hidden sm:inline-flex"><Button variant="ghost" size="icon" aria-label="Admin Panel" asChild><Link to="/admin"><ShieldCheck size={20}/></Link></Button></IconTip>}

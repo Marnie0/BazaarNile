@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { OrderStatus, Prisma, ProductStatus } from '@prisma/client';
+import { CouponType, NotificationType, OrderStatus, Prisma, ProductStatus } from '@prisma/client';
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
@@ -8,7 +8,7 @@ import { asyncHandler } from '../utils/async-handler.js';
 import { AppError } from '../utils/errors.js';
 
 export const shoppingRouter = Router();
-shoppingRouter.use(['/cart', '/wishlist', '/checkout', '/orders'], requireAuth);
+shoppingRouter.use(['/cart', '/wishlist', '/checkout', '/orders', '/coupons'], requireAuth);
 
 const productInclude = {
   category: { select: { name: true, slug: true } },
@@ -111,10 +111,38 @@ const checkoutSchema = z.object({
   shippingCity: z.string().trim().min(2, 'City must contain at least 2 characters').max(80, 'City is too long'),
   shippingRegion: z.string().trim().min(2, 'Governorate must contain at least 2 characters').max(80, 'Governorate is too long'),
   notes: z.string().trim().max(500, 'Delivery notes cannot exceed 500 characters').optional(),
+  couponCode: z.string().trim().max(40).optional(),
 });
 
+async function resolveCoupon(tx: Prisma.TransactionClient, userId: string, rawCode: string, subtotal: Prisma.Decimal) {
+  const code = rawCode.trim().toUpperCase();
+  const coupon = await tx.coupon.findUnique({ where: { code } });
+  const now = new Date();
+  if (!coupon || !coupon.active || coupon.startsAt > now || (coupon.expiresAt && coupon.expiresAt <= now)) throw new AppError(400, 'This coupon is invalid or expired');
+  if (subtotal.lessThan(coupon.minOrderAmount)) throw new AppError(400, `This coupon requires a minimum order of EGP ${coupon.minOrderAmount.toString()}`);
+  if (coupon.usageLimit !== null && coupon.usedCount >= coupon.usageLimit) throw new AppError(409, 'This coupon has reached its usage limit');
+  if (await tx.couponUsage.findUnique({ where: { couponId_userId: { couponId: coupon.id, userId } }, select: { id: true } })) throw new AppError(409, 'You have already used this coupon');
+  let discount = coupon.type === CouponType.PERCENTAGE ? subtotal.mul(coupon.value).div(100) : coupon.value;
+  if (coupon.maxDiscount && discount.greaterThan(coupon.maxDiscount)) discount = coupon.maxDiscount;
+  if (discount.greaterThan(subtotal)) discount = subtotal;
+  return { coupon, discount: discount.toDecimalPlaces(2) };
+}
+
+shoppingRouter.post('/coupons/validate', asyncHandler(async (req, res) => {
+  const { code } = z.object({ code: z.string().trim().min(1).max(40) }).parse(req.body);
+  const result = await prisma.$transaction(async (tx) => {
+    const cart = await tx.cart.findUnique({ where: { userId: req.user!.id }, include: { items: { include: { product: true } } } });
+    if (!cart?.items.length) throw new AppError(400, 'Your cart is empty');
+    const subtotal = cart.items.reduce((sum, item) => sum.plus(item.product.price.mul(item.quantity)), new Prisma.Decimal(0));
+    const shippingFee = subtotal.greaterThanOrEqualTo(1500) ? new Prisma.Decimal(0) : new Prisma.Decimal(75);
+    const { coupon, discount } = await resolveCoupon(tx, req.user!.id, code, subtotal);
+    return { coupon: { code: coupon.code, type: coupon.type, value: coupon.value.toString() }, subtotal: subtotal.toString(), shippingFee: shippingFee.toString(), discount: discount.toString(), total: subtotal.plus(shippingFee).minus(discount).toString() };
+  });
+  res.json(result);
+}));
+
 shoppingRouter.post('/checkout', asyncHandler(async (req, res) => {
-  const shipping = checkoutSchema.parse(req.body);
+  const { couponCode, ...shipping } = checkoutSchema.parse(req.body);
   const order = await serializableTransaction(async (tx) => {
     const cart = await tx.cart.findUnique({
       where: { userId: req.user!.id },
@@ -131,10 +159,13 @@ shoppingRouter.post('/checkout', asyncHandler(async (req, res) => {
     }
     const subtotal = cart.items.reduce((sum, item) => sum.plus(item.product.price.mul(item.quantity)), new Prisma.Decimal(0));
     const shippingFee = subtotal.greaterThanOrEqualTo(1500) ? new Prisma.Decimal(0) : new Prisma.Decimal(75);
+    const couponResult = couponCode ? await resolveCoupon(tx, req.user!.id, couponCode, subtotal) : null;
+    const discount = couponResult?.discount ?? new Prisma.Decimal(0);
     const created = await tx.order.create({
       data: {
         orderNumber: `BN-${Date.now().toString(36).toUpperCase()}-${randomBytes(3).toString('hex').toUpperCase()}`,
-        userId: req.user!.id, ...shipping, subtotal, shippingFee, total: subtotal.plus(shippingFee),
+        userId: req.user!.id, ...shipping, subtotal, shippingFee, discount, total: subtotal.plus(shippingFee).minus(discount),
+        ...(couponResult && { couponId: couponResult.coupon.id, couponCode: couponResult.coupon.code }),
         items: { create: cart.items.map((item) => ({
           productId: item.productId, sellerId: item.product.sellerId, productName: item.product.name,
           productSlug: item.product.slug, imageUrl: item.product.imageUrl, unitPrice: item.product.price,
@@ -143,6 +174,15 @@ shoppingRouter.post('/checkout', asyncHandler(async (req, res) => {
       },
       include: { items: true },
     });
+    if (couponResult) {
+      await tx.couponUsage.create({ data: { couponId: couponResult.coupon.id, userId: req.user!.id, orderId: created.id } });
+      await tx.coupon.update({ where: { id: couponResult.coupon.id }, data: { usedCount: { increment: 1 } } });
+    }
+    const sellerIds = [...new Set(cart.items.map((item) => item.product.sellerId))];
+    await tx.notification.createMany({ data: [
+      { userId: req.user!.id, type: NotificationType.ORDER, title: 'Order placed', message: `${created.orderNumber} was placed successfully.`, link: '/orders' },
+      ...sellerIds.map((sellerId) => ({ userId: sellerId, type: NotificationType.SELLER, title: 'New marketplace order', message: `${created.orderNumber} includes one or more of your products.`, link: '/seller' })),
+    ] });
     await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
     return created;
   });
@@ -179,6 +219,13 @@ shoppingRouter.patch('/orders/:orderNumber/cancel', asyncHandler(async (req, res
     for (const item of found.items) {
       if (item.productId) await tx.product.update({ where: { id: item.productId }, data: { inventory: { increment: item.quantity } } });
     }
+    const usage = await tx.couponUsage.findUnique({ where: { orderId: found.id } });
+    if (usage) {
+      await tx.couponUsage.delete({ where: { id: usage.id } });
+      await tx.coupon.update({ where: { id: usage.couponId }, data: { usedCount: { decrement: 1 } } });
+    }
+    const sellerIds = [...new Set(found.items.map((item) => item.sellerId))];
+    await tx.notification.createMany({ data: sellerIds.map((sellerId) => ({ userId: sellerId, type: NotificationType.SELLER, title: 'Order cancelled', message: `${found.orderNumber} was cancelled and its inventory was restored.`, link: '/seller' })) });
     return tx.order.findUniqueOrThrow({ where: { id: found.id }, include: { items: true } });
   });
   res.json({ order });

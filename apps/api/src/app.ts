@@ -10,6 +10,7 @@ import { shoppingRouter } from './routes/shopping.js';
 import { sellerRouter } from './routes/seller.js';
 import { adminRouter } from './routes/admin.js';
 import { aiRouter } from './routes/ai.js';
+import { notificationsRouter } from './routes/notifications.js';
 import { errorHandler, notFound } from './utils/errors.js';
 
 export const app = express();
@@ -25,6 +26,7 @@ app.use('/api', shoppingRouter);
 app.use('/api', sellerRouter);
 app.use('/api', adminRouter);
 app.use('/api', aiRouter);
+app.use('/api', notificationsRouter);
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.use(notFound);
 app.use(errorHandler);

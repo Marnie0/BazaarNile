@@ -80,10 +80,13 @@ export type OrderItem = { id: string; productId?: string; productName: string; p
 export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED';
 export type Order = {
   id: string; orderNumber: string; status: OrderStatus;
-  paymentMethod: 'CASH_ON_DELIVERY'; paymentStatus: string; subtotal: string; shippingFee: string; total: string;
+  paymentMethod: 'CASH_ON_DELIVERY'; paymentStatus: string; subtotal: string; shippingFee: string; discount: string; total: string; couponCode?: string;
   shippingName: string; shippingPhone: string; shippingAddress: string; shippingCity: string; shippingRegion: string;
   notes?: string; items: OrderItem[]; createdAt: string; updatedAt: string;
 };
+export type Notification = { id: string; type: 'ORDER' | 'SELLER' | 'PROMOTION' | 'SYSTEM'; title: string; message: string; link?: string; readAt?: string; createdAt: string };
+export type Coupon = { id: string; code: string; type: 'PERCENTAGE' | 'FIXED'; value: string; minOrderAmount: string; maxDiscount?: string; usageLimit?: number; usedCount: number; startsAt: string; expiresAt?: string; active: boolean; createdAt: string; updatedAt: string; _count?: { usages: number; orders: number } };
+export type CouponValidation = { coupon: Pick<Coupon, 'code' | 'type' | 'value'>; subtotal: string; shippingFee: string; discount: string; total: string };
 export type ProductStatus = 'DRAFT' | 'PENDING' | 'ACTIVE' | 'REJECTED' | 'ARCHIVED';
 export type SellerProduct = Product & { status: ProductStatus; updatedAt: string; _count: { orderItems: number } };
 export type SellerOverview = {
@@ -96,8 +99,9 @@ export type AdminUser = User & { id: string; email: string; status: 'ACTIVE' | '
 export type AdminProduct = SellerProduct & { seller: Pick<AdminUser, 'id' | 'username' | 'displayName' | 'avatarUrl'> };
 export type AdminOrder = Order & { user: Pick<AdminUser, 'id' | 'username' | 'displayName' | 'email'> };
 export type AdminOverview = {
-  metrics: { totalUsers: number; newUsers: number; sellers: number; suspendedUsers: number; totalProducts: number; activeProducts: number; pendingProducts: number; totalOrders: number; openOrders: number; grossMerchandiseValue: string; averageOrderValue: string };
+  metrics: { totalUsers: number; newUsers: number; sellers: number; suspendedUsers: number; totalProducts: number; activeProducts: number; pendingProducts: number; totalOrders: number; openOrders: number; grossMerchandiseValue: string; averageOrderValue: string; totalDiscounts: string; couponOrders: number; repeatCustomerRate: string };
   chart: { date: string; revenue: string; orders: number }[];
   topSellers: { id: string; displayName: string; username: string; avatarUrl?: string; revenue: string; orders: number }[];
+  categorySales: { name: string; revenue: string; units: number }[];
   recentUsers: AdminUser[];
 };

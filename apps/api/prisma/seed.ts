@@ -1,4 +1,4 @@
-import { PrismaClient, ProductStatus, Role } from '@prisma/client';
+import { CouponType, PrismaClient, ProductStatus, Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -52,6 +52,9 @@ async function main() {
       sellerId: seller.id, inventory: 24, featured, status: ProductStatus.ACTIVE,
     }});
   }
+  await prisma.coupon.upsert({ where: { code: 'WELCOME10' }, update: {}, create: {
+    code: 'WELCOME10', type: CouponType.PERCENTAGE, value: 10, minOrderAmount: 500, maxDiscount: 500,
+  } });
 }
 
 main().finally(() => prisma.$disconnect());
