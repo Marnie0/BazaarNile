@@ -3,6 +3,7 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
+import { PostgresRateLimitStore } from '../lib/rate-limit-store.js';
 import { requireAuth } from '../middleware/auth.js';
 import { generateJson, generateJsonWithImage, generateSummary } from '../services/gemini.js';
 import { asyncHandler } from '../utils/async-handler.js';
@@ -11,6 +12,8 @@ import { AppError } from '../utils/errors.js';
 export const aiRouter = Router();
 aiRouter.use('/ai', requireAuth, rateLimit({
   windowMs: 10 * 60_000, limit: 20, standardHeaders: true, legacyHeaders: false,
+  // Budget AI spend per account rather than per IP; requireAuth has already run.
+  keyGenerator: (req) => req.user!.id, store: new PostgresRateLimitStore('ai'), passOnStoreError: true,
   message: { message: 'Too many AI requests. Please try again shortly' },
 }));
 

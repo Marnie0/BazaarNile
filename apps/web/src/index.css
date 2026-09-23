@@ -30,7 +30,7 @@ img { display: block; max-width: 100%; }
 .field { width: 100%; min-width: 0; border: 1px solid rgba(52,43,37,.14); border-radius: .85rem; background: #fff; padding: .75rem 1rem; outline: none; transition: border-color .15s ease, box-shadow .15s ease; }
 .field:focus { border-color: #244e5a; box-shadow: 0 0 0 4px rgba(36,78,90,.1); }
 .field:user-invalid { border-color: #b4412c; }
-.field-label { display: grid; gap: .4rem; font-size: .875rem; font-weight: 600; }
+.field-label { display: grid; align-content: start; gap: .4rem; font-size: .875rem; font-weight: 600; }
 .field-hint { font-size: .75rem; font-weight: 400; color: rgba(52,43,37,.5); }
 .surface { border: 1px solid rgba(52,43,37,.08); border-radius: 1.25rem; background: #fff; }
 .chip { display: inline-flex; flex: none; align-items: center; gap: .4rem; min-height: 2.35rem; padding: .45rem .95rem; border: 1px solid rgba(52,43,37,.12); border-radius: 999px; background: #fff; font-size: .85rem; font-weight: 600; white-space: nowrap; cursor: pointer; transition: border-color .15s ease, background .15s ease, color .15s ease; }

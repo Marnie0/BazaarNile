@@ -4,6 +4,7 @@ import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { env } from '../config/env.js';
 import { prisma } from '../lib/prisma.js';
+import { PostgresRateLimitStore } from '../lib/rate-limit-store.js';
 import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../utils/async-handler.js';
 import { AppError } from '../utils/errors.js';
@@ -24,6 +25,7 @@ const cookieOptions = () => ({
 // Credential endpoints get a much tighter budget than the rest of /api/auth to slow password guessing.
 const credentialLimiter = rateLimit({
   windowMs: 15 * 60_000, limit: 10, standardHeaders: true, legacyHeaders: false, skipSuccessfulRequests: true,
+  store: new PostgresRateLimitStore('credentials'), passOnStoreError: true,
   message: { message: 'Too many sign-in attempts. Please wait a few minutes and try again' },
 });
 // Compared against when the email is unknown so response time does not reveal which accounts exist.

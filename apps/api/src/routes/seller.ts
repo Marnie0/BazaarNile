@@ -46,34 +46,36 @@ sellerRouter.post('/seller/enroll', asyncHandler(async (req, res) => {
 }));
 sellerRouter.use('/seller', requireSeller);
 
+// Totals are aggregated in the database so the dashboard stays fast however many orders a seller has.
 sellerRouter.get('/seller/overview', asyncHandler(async (req, res) => {
   const sellerId = req.user!.id; const since = new Date(); since.setHours(0, 0, 0, 0); since.setDate(since.getDate() - 13);
-  const [products, orderItems] = await prisma.$transaction([
-    prisma.product.findMany({ where: { sellerId }, orderBy: { createdAt: 'desc' }, include: productInclude }),
-    prisma.orderItem.findMany({ where: { sellerId, order: { status: { not: OrderStatus.CANCELLED } } }, orderBy: { createdAt: 'desc' },
+  const live = { sellerId, order: { status: { not: OrderStatus.CANCELLED } } } satisfies Prisma.OrderItemWhereInput;
+  const [totalProducts, activeProducts, lowStock, outOfStock, sales, delivered, recentSales, windowItems, topGroups] = await Promise.all([
+    prisma.product.count({ where: { sellerId } }),
+    prisma.product.count({ where: { sellerId, status: ProductStatus.ACTIVE } }),
+    prisma.product.count({ where: { sellerId, inventory: { gt: 0, lte: 5 } } }),
+    prisma.product.count({ where: { sellerId, inventory: 0 } }),
+    prisma.orderItem.aggregate({ where: live, _sum: { lineTotal: true, quantity: true } }),
+    prisma.orderItem.aggregate({ where: { sellerId, order: { status: OrderStatus.DELIVERED } }, _sum: { lineTotal: true } }),
+    prisma.orderItem.findMany({ where: live, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 6,
       include: { order: { select: { orderNumber: true, status: true, shippingName: true, createdAt: true } } } }),
+    prisma.orderItem.findMany({ where: { sellerId, order: { status: { not: OrderStatus.CANCELLED }, createdAt: { gte: since } } },
+      select: { lineTotal: true, order: { select: { createdAt: true } } } }),
+    prisma.orderItem.groupBy({ by: ['productSlug'], where: live, _sum: { quantity: true, lineTotal: true }, orderBy: [{ _sum: { quantity: 'desc' } }, { _sum: { lineTotal: 'desc' } }], take: 5 }),
   ]);
-  const revenue = orderItems.filter((item) => item.order.status === OrderStatus.DELIVERED)
-    .reduce((sum, item) => sum.plus(item.lineTotal), new Prisma.Decimal(0));
-  const grossSales = orderItems.reduce((sum, item) => sum.plus(item.lineTotal), new Prisma.Decimal(0));
   const chart = Array.from({ length: 14 }, (_, offset) => {
     const day = new Date(since); day.setDate(since.getDate() + offset); const next = new Date(day); next.setDate(day.getDate() + 1);
-    const total = orderItems.filter((item) => item.order.createdAt >= day && item.order.createdAt < next)
+    const total = windowItems.filter((item) => item.order.createdAt >= day && item.order.createdAt < next)
       .reduce((sum, item) => sum.plus(item.lineTotal), new Prisma.Decimal(0));
     return { date: day.toISOString().slice(0, 10), revenue: total.toString() };
   });
-  const productSales = new Map<string, { productName: string; units: number; revenue: Prisma.Decimal }>();
-  for (const item of orderItems) {
-    const current = productSales.get(item.productSlug) ?? { productName: item.productName, units: 0, revenue: new Prisma.Decimal(0) };
-    current.units += item.quantity; current.revenue = current.revenue.plus(item.lineTotal); productSales.set(item.productSlug, current);
-  }
-  res.json({ metrics: { revenue: revenue.toString(), grossSales: grossSales.toString(),
-    unitsSold: orderItems.reduce((sum, item) => sum + item.quantity, 0), totalProducts: products.length,
-    activeProducts: products.filter((product) => product.status === ProductStatus.ACTIVE).length,
-    lowStock: products.filter((product) => product.inventory > 0 && product.inventory <= 5).length,
-    outOfStock: products.filter((product) => product.inventory === 0).length }, chart, recentSales: orderItems.slice(0, 6),
-    topProducts: [...productSales.values()].sort((a, b) => b.units - a.units).slice(0, 5)
-      .map((item) => ({ ...item, revenue: item.revenue.toString() })) });
+  const names = await prisma.orderItem.findMany({ where: { sellerId, productSlug: { in: topGroups.map((group) => group.productSlug) } },
+    orderBy: { createdAt: 'desc' }, distinct: ['productSlug'], select: { productSlug: true, productName: true } });
+  const nameBySlug = new Map(names.map((item) => [item.productSlug, item.productName]));
+  res.json({ metrics: { revenue: (delivered._sum.lineTotal ?? new Prisma.Decimal(0)).toString(), grossSales: (sales._sum.lineTotal ?? new Prisma.Decimal(0)).toString(),
+    unitsSold: sales._sum.quantity ?? 0, totalProducts, activeProducts, lowStock, outOfStock }, chart, recentSales,
+    topProducts: topGroups.map((group) => ({ productName: nameBySlug.get(group.productSlug) ?? group.productSlug, units: group._sum.quantity ?? 0,
+      revenue: (group._sum.lineTotal ?? new Prisma.Decimal(0)).toString() })) });
 }));
 
 sellerRouter.get('/seller/products', asyncHandler(async (req, res) => {

@@ -284,3 +284,12 @@ model RefreshToken {
   @@index([userId])
   @@index([expiresAt])
 }
+
+// Fixed-window counters shared by every API instance (serverless functions do not share memory).
+model RateLimit {
+  key     String   @id
+  hits    Int
+  resetAt DateTime
+
+  @@index([resetAt])
+}

@@ -16,14 +16,17 @@ const safeUser = {
   _count: { select: { products: true, orders: true } },
 } as const;
 
+// Every figure is computed in the database; nothing here loads the full order history into memory.
 adminRouter.get('/admin/overview', asyncHandler(async (_req, res) => {
   const since = new Date();
   since.setHours(0, 0, 0, 0);
   since.setDate(since.getDate() - 13);
   const monthAgo = new Date();
   monthAgo.setDate(monthAgo.getDate() - 30);
+  const live = { status: { not: OrderStatus.CANCELLED } } satisfies Prisma.OrderWhereInput;
 
-  const [totalUsers, newUsers, sellers, suspendedUsers, totalProducts, activeProducts, pendingProducts, totalOrders, openOrders, orders, recentUsers] = await prisma.$transaction([
+  const [totalUsers, newUsers, sellers, suspendedUsers, totalProducts, activeProducts, pendingProducts, totalOrders, openOrders, recentUsers,
+    orderTotals, couponOrders, windowOrders, [customers], sellerSales, categorySales] = await Promise.all([
     prisma.user.count(),
     prisma.user.count({ where: { createdAt: { gte: monthAgo } } }),
     prisma.user.count({ where: { role: Role.SELLER } }),
@@ -33,62 +36,55 @@ adminRouter.get('/admin/overview', asyncHandler(async (_req, res) => {
     prisma.product.count({ where: { status: ProductStatus.PENDING } }),
     prisma.order.count(),
     prisma.order.count({ where: { status: { notIn: [OrderStatus.DELIVERED, OrderStatus.CANCELLED] } } }),
-    prisma.order.findMany({
-      where: { status: { not: OrderStatus.CANCELLED } },
-      select: { id: true, userId: true, subtotal: true, discount: true, createdAt: true, items: { select: { sellerId: true, lineTotal: true, quantity: true, product: { select: { category: { select: { name: true } } } } } } },
-    }),
     prisma.user.findMany({ orderBy: { createdAt: 'desc' }, take: 6, select: safeUser }),
+    prisma.order.aggregate({ where: live, _sum: { subtotal: true, discount: true }, _count: { _all: true } }),
+    prisma.order.count({ where: { ...live, discount: { gt: 0 } } }),
+    prisma.order.findMany({ where: { ...live, createdAt: { gte: since } }, select: { subtotal: true, createdAt: true } }),
+    prisma.$queryRaw<{ customers: bigint; repeat: bigint }[]>`
+      SELECT COUNT(*) AS "customers", COUNT(*) FILTER (WHERE "orders" > 1) AS "repeat"
+      FROM (SELECT COUNT(*) AS "orders" FROM "Order" WHERE "status" <> 'CANCELLED' GROUP BY "userId") AS per_customer`,
+    prisma.$queryRaw<{ sellerId: string; revenue: Prisma.Decimal; orders: bigint }[]>`
+      SELECT oi."sellerId", SUM(oi."lineTotal") AS "revenue", COUNT(DISTINCT oi."orderId") AS "orders"
+      FROM "OrderItem" oi JOIN "Order" o ON o."id" = oi."orderId"
+      WHERE o."status" <> 'CANCELLED' GROUP BY oi."sellerId" ORDER BY "revenue" DESC LIMIT 5`,
+    prisma.$queryRaw<{ name: string; revenue: Prisma.Decimal; units: bigint }[]>`
+      SELECT COALESCE(c."name", 'Archived products') AS "name", SUM(oi."lineTotal") AS "revenue", SUM(oi."quantity") AS "units"
+      FROM "OrderItem" oi JOIN "Order" o ON o."id" = oi."orderId"
+      LEFT JOIN "Product" p ON p."id" = oi."productId" LEFT JOIN "Category" c ON c."id" = p."categoryId"
+      WHERE o."status" <> 'CANCELLED' GROUP BY 1 ORDER BY "revenue" DESC LIMIT 5`,
   ]);
 
-  const grossMerchandiseValue = orders.reduce((sum, order) => sum.plus(order.subtotal), new Prisma.Decimal(0));
-  const totalDiscounts = orders.reduce((sum, order) => sum.plus(order.discount), new Prisma.Decimal(0));
-  const customerOrders = new Map<string, number>();
-  orders.forEach((order) => customerOrders.set(order.userId, (customerOrders.get(order.userId) ?? 0) + 1));
-  const repeatCustomerRate = customerOrders.size ? [...customerOrders.values()].filter((count) => count > 1).length / customerOrders.size * 100 : 0;
+  const grossMerchandiseValue = orderTotals._sum.subtotal ?? new Prisma.Decimal(0);
+  const liveOrders = orderTotals._count._all;
+  const customerCount = Number(customers?.customers ?? 0);
+  const repeatCustomerRate = customerCount ? Number(customers?.repeat ?? 0) / customerCount * 100 : 0;
   const chart = Array.from({ length: 14 }, (_, offset) => {
     const day = new Date(since);
     day.setDate(since.getDate() + offset);
     const next = new Date(day);
     next.setDate(day.getDate() + 1);
-    const daily = orders.filter((order) => order.createdAt >= day && order.createdAt < next);
+    const daily = windowOrders.filter((order) => order.createdAt >= day && order.createdAt < next);
     return {
       date: day.toISOString().slice(0, 10),
       revenue: daily.reduce((sum, order) => sum.plus(order.subtotal), new Prisma.Decimal(0)).toString(),
       orders: daily.length,
     };
   });
-
-  const sellerSales = new Map<string, { revenue: Prisma.Decimal; orders: Set<string>; units: number }>();
-  for (const order of orders) {
-    for (const item of order.items) {
-      const current = sellerSales.get(item.sellerId) ?? { revenue: new Prisma.Decimal(0), orders: new Set<string>(), units: 0 };
-      current.revenue = current.revenue.plus(item.lineTotal);
-      current.orders.add(order.id);
-      current.units += item.quantity;
-      sellerSales.set(item.sellerId, current);
-    }
-  }
-  const topSellerIds = [...sellerSales.entries()].sort((a, b) => b[1].revenue.comparedTo(a[1].revenue)).slice(0, 5).map(([id]) => id);
-  const sellerProfiles = await prisma.user.findMany({ where: { id: { in: topSellerIds } }, select: { id: true, displayName: true, username: true, avatarUrl: true } });
+  const sellerProfiles = await prisma.user.findMany({ where: { id: { in: sellerSales.map((row) => row.sellerId) } }, select: { id: true, displayName: true, username: true, avatarUrl: true } });
   const profileMap = new Map(sellerProfiles.map((profile) => [profile.id, profile]));
-  const topSellers = topSellerIds.map((id) => ({ ...profileMap.get(id), revenue: sellerSales.get(id)!.revenue.toString(), orders: sellerSales.get(id)!.orders.size }));
-  const categoryMap = new Map<string, { revenue: Prisma.Decimal; units: number }>();
-  for (const order of orders) for (const item of order.items) {
-    const name = item.product?.category.name ?? 'Archived products'; const current = categoryMap.get(name) ?? { revenue: new Prisma.Decimal(0), units: 0 };
-    current.revenue = current.revenue.plus(item.lineTotal); current.units += item.quantity; categoryMap.set(name, current);
-  }
-  const categorySales = [...categoryMap.entries()].map(([name, value]) => ({ name, revenue: value.revenue.toString(), units: value.units }))
-    .sort((a, b) => Number(b.revenue) - Number(a.revenue)).slice(0, 5);
+  const topSellers = sellerSales.map((row) => ({ ...profileMap.get(row.sellerId), revenue: row.revenue.toString(), orders: Number(row.orders) }));
 
   res.json({
     metrics: {
       totalUsers, newUsers, sellers, suspendedUsers, totalProducts, activeProducts, pendingProducts,
       totalOrders, openOrders, grossMerchandiseValue: grossMerchandiseValue.toString(),
-      averageOrderValue: orders.length ? grossMerchandiseValue.div(orders.length).toFixed(2) : '0',
-      totalDiscounts: totalDiscounts.toString(), couponOrders: orders.filter((order) => order.discount.greaterThan(0)).length,
+      averageOrderValue: liveOrders ? grossMerchandiseValue.div(liveOrders).toFixed(2) : '0',
+      totalDiscounts: (orderTotals._sum.discount ?? new Prisma.Decimal(0)).toString(), couponOrders,
       repeatCustomerRate: repeatCustomerRate.toFixed(1),
     },
-    chart, topSellers, categorySales, recentUsers,
+    chart, topSellers,
+    categorySales: categorySales.map((row) => ({ name: row.name, revenue: row.revenue.toString(), units: Number(row.units) })),
+    recentUsers,
   });
 }));
 
