@@ -2,21 +2,51 @@
 // developer's local VITE_API_URL to be baked into a production storefront.
 export const API_URL = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_URL ?? '/api');
 
-let accessToken: string | null = localStorage.getItem('bn_access_token');
+// The access token lives only in memory so an injected script cannot lift it from storage.
+// localStorage keeps a non-secret hint that a session exists; the httpOnly refresh cookie
+// restores the token on the first request after a reload.
+const SESSION_HINT_KEY = 'bn_session';
+const LEGACY_TOKEN_KEY = 'bn_access_token';
+
+const storage = {
+  get: (key: string) => { try { return localStorage.getItem(key); } catch { return null; } },
+  set: (key: string, value: string) => { try { localStorage.setItem(key, value); } catch { /* storage unavailable */ } },
+  remove: (key: string) => { try { localStorage.removeItem(key); } catch { /* storage unavailable */ } },
+};
+
+if (storage.get(LEGACY_TOKEN_KEY)) {
+  storage.remove(LEGACY_TOKEN_KEY);
+  storage.set(SESSION_HINT_KEY, '1');
+}
+
+let accessToken: string | null = null;
+let sessionHint = storage.get(SESSION_HINT_KEY) === '1';
 let refreshPromise: Promise<string | null> | null = null;
 const accessTokenListeners = new Set<() => void>();
-export const hasAccessToken = () => Boolean(accessToken);
+export const hasAccessToken = () => Boolean(accessToken) || sessionHint;
 export const subscribeToAccessToken = (listener: () => void) => {
   accessTokenListeners.add(listener);
   return () => accessTokenListeners.delete(listener);
 };
 export const setAccessToken = (token: string | null) => {
-  const changed = accessToken !== token;
+  const wasAuthenticated = hasAccessToken();
   accessToken = token;
-  if (token) localStorage.setItem('bn_access_token', token);
-  else localStorage.removeItem('bn_access_token');
-  if (changed) accessTokenListeners.forEach((listener) => listener());
+  sessionHint = Boolean(token);
+  if (token) storage.set(SESSION_HINT_KEY, '1');
+  else storage.remove(SESSION_HINT_KEY);
+  if (wasAuthenticated !== hasAccessToken()) accessTokenListeners.forEach((listener) => listener());
 };
+
+// Keep tabs in step: signing out in one tab signs out the others.
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key !== SESSION_HINT_KEY) return;
+    const wasAuthenticated = hasAccessToken();
+    sessionHint = event.newValue === '1';
+    if (!sessionHint) accessToken = null;
+    if (wasAuthenticated !== hasAccessToken()) accessTokenListeners.forEach((listener) => listener());
+  });
+}
 
 export class ApiError extends Error {
   constructor(message: string, public status: number) { super(message); }
@@ -26,6 +56,7 @@ async function refreshAccessToken() {
   if (!refreshPromise) {
     refreshPromise = fetch(`${API_URL}/auth/refresh`, { method: 'POST', credentials: 'include' })
       .then(async (response) => {
+        if (response.status === 401) { setAccessToken(null); return null; }
         if (!response.ok) return null;
         const session = await response.json() as { accessToken: string };
         setAccessToken(session.accessToken);
@@ -37,7 +68,11 @@ async function refreshAccessToken() {
   return refreshPromise;
 }
 
+const authPaths = ['/auth/login', '/auth/register', '/auth/refresh', '/auth/logout'];
+
 async function request<T>(path: string, init: RequestInit, canRefresh: boolean): Promise<T> {
+  const refreshable = !authPaths.includes(path);
+  if (!accessToken && sessionHint && refreshable) await refreshAccessToken();
   const headers = new Headers(init.headers);
   if (init.body) headers.set('Content-Type', 'application/json');
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`);
@@ -47,12 +82,9 @@ async function request<T>(path: string, init: RequestInit, canRefresh: boolean):
   } catch {
     throw new ApiError('Unable to reach BazaarNile. Check your connection and try again.', 0);
   }
-  const refreshable = !['/auth/login', '/auth/register', '/auth/refresh', '/auth/logout'].includes(path);
-  if (response.status === 401 && canRefresh && refreshable) {
+  if (response.status === 401 && canRefresh && refreshable && accessToken) {
     const refreshed = await refreshAccessToken();
-    if (refreshed) {
-      return request<T>(path, init, false);
-    }
+    if (refreshed) return request<T>(path, init, false);
     setAccessToken(null);
   }
   if (!response.ok) {

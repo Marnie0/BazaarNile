@@ -15,14 +15,20 @@ const productInclude = {
   _count: { select: { orderItems: true } },
 } as const;
 
-const productSchema = z.object({
+// Only http(s) images may be stored; z.url() alone also accepts schemes such as javascript: and data:.
+const imageUrl = z.url({ protocol: /^https?$/, hostname: z.regexes.domain }).max(1000);
+const productFields = z.object({
   name: z.string().trim().min(3).max(120), description: z.string().trim().min(20).max(3000),
   price: z.coerce.number().positive().max(99_999_999),
   compareAt: z.union([z.coerce.number().positive().max(99_999_999), z.literal(''), z.null()]).optional(),
-  imageUrl: z.url().max(1000), images: z.array(z.url().max(1000)).max(8).optional(),
+  imageUrl, images: z.array(imageUrl).max(8).optional(),
   inventory: z.coerce.number().int().min(0).max(1_000_000), categoryId: z.string().min(1),
-  status: z.enum(ProductStatus).default(ProductStatus.ACTIVE),
+  status: z.enum(ProductStatus),
 });
+const productSchema = productFields.extend({ status: productFields.shape.status.default(ProductStatus.ACTIVE) });
+// Built from the default-free fields: in Zod 4 a default survives .partial(), which would silently
+// resubmit drafts and archived listings for review on every partial update.
+const productUpdateSchema = productFields.partial();
 
 const slugify = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 70) || 'product';
 async function uniqueSlug(name: string, excludeId?: string) {
@@ -93,7 +99,7 @@ sellerRouter.post('/seller/products', asyncHandler(async (req, res) => {
 
 sellerRouter.patch('/seller/products/:id', asyncHandler(async (req, res) => {
   const id = z.string().parse(req.params.id); const existing = await prisma.product.findFirst({ where: { id, sellerId: req.user!.id } });
-  if (!existing) throw new AppError(404, 'Product not found'); const data = productSchema.partial().parse(req.body);
+  if (!existing) throw new AppError(404, 'Product not found'); const data = productUpdateSchema.parse(req.body);
   if (data.categoryId && !(await prisma.category.findUnique({ where: { id: data.categoryId }, select: { id: true } }))) throw new AppError(400, 'Category not found');
   const requestedStatus = data.status;
   const status = requestedStatus === ProductStatus.ACTIVE

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { env } from '../config/env.js';
 import { prisma } from '../lib/prisma.js';
@@ -10,13 +11,25 @@ import { hashToken, signAccessToken, signRefreshToken, verifyRefreshToken } from
 
 export const authRouter = Router();
 const safeUser = { id: true, email: true, username: true, displayName: true, avatarUrl: true, bio: true, role: true, status: true, createdAt: true } as const;
+// The storefront and API share an origin in production, so the refresh cookie never needs to be
+// sent cross-site. 'lax' blocks cross-site POSTs to /refresh and /logout.
 const cookieOptions = () => ({
   httpOnly: true,
   secure: env.NODE_ENV === 'production',
-  sameSite: env.NODE_ENV === 'production' ? 'none' as const : 'lax' as const,
+  sameSite: 'lax' as const,
   maxAge: env.REFRESH_TOKEN_TTL_DAYS * 86_400_000,
   path: '/api/auth',
 });
+
+// Credential endpoints get a much tighter budget than the rest of /api/auth to slow password guessing.
+const credentialLimiter = rateLimit({
+  windowMs: 15 * 60_000, limit: 10, standardHeaders: true, legacyHeaders: false, skipSuccessfulRequests: true,
+  message: { message: 'Too many sign-in attempts. Please wait a few minutes and try again' },
+});
+// Compared against when the email is unknown so response time does not reveal which accounts exist.
+const dummyPasswordHash = bcrypt.hashSync('bazaarnile-timing-equalizer', 12);
+// Tabs that load at the same moment may present the same refresh token; tolerate that briefly.
+const REFRESH_REUSE_GRACE_MS = 30_000;
 
 async function issueSession(user: { id: string; role: string }, res: Parameters<import('express').RequestHandler>[1]) {
   const accessToken = signAccessToken({ sub: user.id, role: user.role });
@@ -29,7 +42,7 @@ async function issueSession(user: { id: string; role: string }, res: Parameters<
   return accessToken;
 }
 
-authRouter.post('/register', asyncHandler(async (req, res) => {
+authRouter.post('/register', credentialLimiter, asyncHandler(async (req, res) => {
   const data = z.object({
     email: z.email().transform((value) => value.toLowerCase()),
     username: z.string().min(3).max(30).regex(/^[a-z0-9_]+$/).transform((value) => value.toLowerCase()),
@@ -52,10 +65,11 @@ authRouter.post('/register', asyncHandler(async (req, res) => {
   res.status(201).json({ user, accessToken });
 }));
 
-authRouter.post('/login', asyncHandler(async (req, res) => {
-  const data = z.object({ email: z.email().transform((v) => v.toLowerCase()), password: z.string().min(1) }).parse(req.body);
+authRouter.post('/login', credentialLimiter, asyncHandler(async (req, res) => {
+  const data = z.object({ email: z.email().transform((v) => v.toLowerCase()), password: z.string().min(1).max(72) }).parse(req.body);
   const found = await prisma.user.findUnique({ where: { email: data.email } });
-  if (!found || !(await bcrypt.compare(data.password, found.passwordHash))) throw new AppError(401, 'Invalid email or password');
+  const passwordMatches = await bcrypt.compare(data.password, found?.passwordHash ?? dummyPasswordHash);
+  if (!found || !passwordMatches) throw new AppError(401, 'Invalid email or password');
   if (found.status === 'SUSPENDED') throw new AppError(403, 'This account has been suspended');
   const user = await prisma.user.findUniqueOrThrow({ where: { id: found.id }, select: safeUser });
   const accessToken = await issueSession(user, res);
@@ -68,17 +82,21 @@ authRouter.post('/refresh', asyncHandler(async (req, res) => {
   let payload: ReturnType<typeof verifyRefreshToken>;
   try { payload = verifyRefreshToken(token); } catch { throw new AppError(401, 'Invalid refresh token'); }
   const stored = await prisma.refreshToken.findUnique({ where: { tokenHash: hashToken(token) }, include: { user: true } });
-  if (!stored || stored.revokedAt || stored.expiresAt < new Date() || stored.userId !== payload.sub || stored.user.status === 'SUSPENDED') {
+  const now = Date.now();
+  const withinGrace = stored?.revokedAt && now - stored.revokedAt.getTime() < REFRESH_REUSE_GRACE_MS;
+  if (!stored || (stored.revokedAt && !withinGrace) || stored.expiresAt.getTime() < now || stored.userId !== payload.sub || stored.user.status === 'SUSPENDED') {
     throw new AppError(401, 'Refresh token is no longer valid');
   }
-  await prisma.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } });
+  // Conditional revoke so two concurrent refreshes cannot both treat the token as fresh.
+  if (!stored.revokedAt) await prisma.refreshToken.updateMany({ where: { id: stored.id, revokedAt: null }, data: { revokedAt: new Date() } });
   const accessToken = await issueSession(stored.user, res);
   res.json({ accessToken });
 }));
 
 authRouter.post('/logout', asyncHandler(async (req, res) => {
   const token = req.cookies.refreshToken as string | undefined;
-  if (token) await prisma.refreshToken.updateMany({ where: { tokenHash: hashToken(token), revokedAt: null }, data: { revokedAt: new Date() } });
+  // Delete rather than revoke, so the rotation grace window cannot revive a signed-out session.
+  if (token) await prisma.refreshToken.deleteMany({ where: { tokenHash: hashToken(token) } });
   res.clearCookie('refreshToken', { ...cookieOptions(), maxAge: undefined });
   res.status(204).send();
 }));

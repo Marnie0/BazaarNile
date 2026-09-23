@@ -19,6 +19,15 @@ export const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
     res.status(error.status).json({ message: error.message });
     return;
   }
+  // body-parser errors (malformed JSON, oversized payloads) are client errors, not server faults.
+  if (error?.type === 'entity.parse.failed') {
+    res.status(400).json({ message: 'The request body is not valid JSON' });
+    return;
+  }
+  if (error?.type === 'entity.too.large') {
+    res.status(413).json({ message: 'The request is too large' });
+    return;
+  }
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     if (error.code === 'P2002') {
       res.status(409).json({ message: 'A record with these details already exists' });
