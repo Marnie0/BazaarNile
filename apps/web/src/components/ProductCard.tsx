@@ -1,29 +1,40 @@
 import { motion } from 'framer-motion';
-import { Heart } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Heart, Plus } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { hasAccessToken, type Product } from '../lib/api';
+import { useAddToCart } from '../hooks/useAddToCart';
 import { useWishlist } from '../hooks/useWishlist';
-import { money } from '../lib/utils';
+import { discountPercent, money } from '../lib/utils';
 
 export function ProductCard({ product }: { product: Product }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const wishlist = useWishlist(product);
-  const toggleWishlist = () => { if (!hasAccessToken()) navigate('/login'); else wishlist.toggle(); };
+  const addToCart = useAddToCart();
+  const requireAccount = (action: () => void) => hasAccessToken() ? action() : navigate('/login', { state: { from: location.pathname + location.search } });
+  const discount = discountPercent(product.price, product.compareAt);
+  const soldOut = product.inventory <= 0;
 
-  return <article className="product-card">
+  return <article className="product-card group">
     <div className="product-card__media">
-      <Link to={`/products/${product.slug}`} className="product-card__image-link">
-        <img src={product.imageUrl} alt={product.name} loading="lazy"/>
-        {product.featured && <span className="product-card__badge">Featured</span>}
+      <Link to={`/products/${product.slug}`} className="product-card__image-link" tabIndex={-1} aria-hidden="true">
+        <img src={product.imageUrl} alt="" loading="lazy" decoding="async"/>
       </Link>
-      <motion.button whileTap={{ scale: .88 }} onClick={toggleWishlist} disabled={wishlist.isPending} className={`product-card__wish ${wishlist.saved ? 'is-saved' : ''}`} aria-label={wishlist.saved ? `Remove ${product.name} from wishlist` : `Add ${product.name} to wishlist`} aria-pressed={wishlist.saved}>
-        <Heart size={19} fill={wishlist.saved ? 'currentColor' : 'none'}/>
+      <div className="product-card__badges">
+        {soldOut ? <span className="product-card__badge product-card__badge--muted">Sold out</span> : discount ? <span className="product-card__badge product-card__badge--sale">−{discount}%</span> : product.featured && <span className="product-card__badge">Featured</span>}
+      </div>
+      <motion.button type="button" whileTap={{ scale: .88 }} onClick={() => requireAccount(() => wishlist.toggle())} disabled={wishlist.isPending} className={`product-card__wish ${wishlist.saved ? 'is-saved' : ''}`} aria-label={wishlist.saved ? `Remove ${product.name} from wishlist` : `Save ${product.name} to wishlist`} aria-pressed={wishlist.saved}>
+        <Heart size={18} fill={wishlist.saved ? 'currentColor' : 'none'}/>
       </motion.button>
+      {!soldOut && <button type="button" onClick={() => requireAccount(() => addToCart.mutate({ product, quantity: 1 }))} disabled={addToCart.isPending} className="product-card__quick-add" aria-label={`Add ${product.name} to cart`}>
+        <Plus size={16}/><span>{addToCart.isPending ? 'Adding…' : 'Add to cart'}</span>
+      </button>}
     </div>
     <div className="product-card__body">
       <p className="product-card__category">{product.category.name}</p>
-      <Link to={`/products/${product.slug}`}><h3>{product.name}</h3></Link>
-      <div className="product-card__meta"><span>{money(product.price)}</span><span>by {product.seller.displayName}</span></div>
+      <h3><Link to={`/products/${product.slug}`}>{product.name}</Link></h3>
+      <div className="product-card__price"><strong>{money(product.price)}</strong>{discount > 0 && <s>{money(product.compareAt!)}</s>}</div>
+      <p className="product-card__seller">by {product.seller.displayName}</p>
     </div>
   </article>;
 }

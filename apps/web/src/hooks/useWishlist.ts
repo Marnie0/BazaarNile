@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, hasAccessToken, type Product, type WishlistItem } from '../lib/api';
+import { toast, toastError } from '../lib/toast';
+import { api, type Product, type WishlistItem } from '../lib/api';
+import { useIsAuthenticated } from './useSession';
 
 type WishlistData = { items: WishlistItem[] };
 
 export function useWishlist(product: Product | undefined) {
   const queryClient = useQueryClient();
-  const authenticated = hasAccessToken();
+  const authenticated = useIsAuthenticated();
   const wishlist = useQuery({
     queryKey: ['wishlist'],
     queryFn: () => api<WishlistData>('/wishlist'),
@@ -30,7 +32,9 @@ export function useWishlist(product: Product | undefined) {
         if (current.items.some((item) => item.product.id === product?.id)) return current;
         return { items: [result.item, ...current.items] };
       });
+      toast(result.saved ? 'Saved to your wishlist' : 'Removed from your wishlist', result.saved ? { action: { label: 'View', to: '/wishlist' } } : {});
     },
+    onError: (error) => toastError(error, 'Could not update your wishlist'),
   });
   return { saved: toggle.isPending ? !saved : saved, toggle: toggle.mutate, isPending: toggle.isPending, error: toggle.error };
 }
