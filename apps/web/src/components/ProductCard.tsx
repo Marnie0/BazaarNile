@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { hasAccessToken, type Product } from '../lib/api';
 import { useAddToCart } from '../hooks/useAddToCart';
 import { useWishlist } from '../hooks/useWishlist';
-import { discountPercent, money } from '../lib/utils';
+import { discountPercent, money, stockLevel } from '../lib/utils';
 
 export function ProductCard({ product }: { product: Product }) {
   const navigate = useNavigate();
@@ -14,6 +14,7 @@ export function ProductCard({ product }: { product: Product }) {
   const requireAccount = (action: () => void) => hasAccessToken() ? action() : navigate('/login', { state: { from: location.pathname + location.search } });
   const discount = discountPercent(product.price, product.compareAt);
   const soldOut = product.inventory <= 0;
+  const urgent = stockLevel(product.inventory) === 'urgent';
 
   return <article className="product-card group">
     <div className="product-card__media">
@@ -34,6 +35,7 @@ export function ProductCard({ product }: { product: Product }) {
       <p className="product-card__category">{product.category.name}</p>
       <h3><Link to={`/products/${product.slug}`}>{product.name}</Link></h3>
       <div className="product-card__price"><strong>{money(product.price)}</strong>{discount > 0 && <s>{money(product.compareAt!)}</s>}</div>
+      {urgent && <p className="product-card__stock">Only {product.inventory} left</p>}
       <p className="product-card__seller">by {product.seller.displayName}</p>
     </div>
   </article>;

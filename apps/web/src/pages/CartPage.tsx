@@ -7,7 +7,7 @@ import { toast, toastError } from '../lib/toast';
 import { Button } from '../components/ui/Button';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { api, ApiError, type AiSummary, type Cart } from '../lib/api';
-import { FREE_SHIPPING_THRESHOLD, money, shippingFor } from '../lib/utils';
+import { FREE_SHIPPING_THRESHOLD, money, shippingFor, stockLevel } from '../lib/utils';
 
 export function FreeShippingMeter({ subtotal }: { subtotal: number }) {
   const remaining = FREE_SHIPPING_THRESHOLD - subtotal;
@@ -68,7 +68,7 @@ export function CartPage() {
             {active ? <Link to={`/products/${item.product.slug}`} className="mt-1 block font-semibold leading-snug hover:text-clay sm:text-lg">{item.product.name}</Link> : <p className="mt-1 font-semibold sm:text-lg">{item.product.name}</p>}
             <p className="mt-1 text-sm text-ink/55">{money(item.product.price)} each · by {item.product.seller.displayName}</p>
             {!active && <p className="mt-2 text-xs font-semibold text-red-700">No longer available — please remove it</p>}
-            {active && item.product.inventory < item.quantity && <p className="mt-2 text-xs font-semibold text-red-700">Only {item.product.inventory} left — lower the quantity to continue</p>}
+            {active && item.product.inventory < item.quantity && <p className="mt-2 text-xs font-semibold text-red-700">Only {item.product.inventory} left — lower the quantity to continue</p>}{active && item.product.inventory >= item.quantity && stockLevel(item.product.inventory) === 'urgent' && <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-red-600"><span className="size-1.5 rounded-full bg-current"/>Only {item.product.inventory} left in stock</p>}
             <div className="mt-3 flex items-center gap-4">
               <div className={`inline-flex items-center rounded-full border border-ink/12 bg-white ${busy ? 'opacity-60' : ''}`}>
                 <button type="button" aria-label={`Decrease quantity of ${item.product.name}`} disabled={!active || item.quantity <= 1 || busy} onClick={() => update.mutate({ id: item.id, quantity: item.quantity - 1 })} className="grid size-9 place-items-center rounded-full disabled:opacity-30"><Minus size={14}/></button>

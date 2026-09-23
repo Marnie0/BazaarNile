@@ -12,3 +12,10 @@ export const discountPercent = (price: string | number, compareAt?: string | num
   return compareAt && original > current ? Math.round((1 - current / original) * 100) : 0;
 };
 export const formatDate = (value: string, options: Intl.DateTimeFormatOptions = { dateStyle: 'medium' }) => new Date(value).toLocaleString('en-EG', options);
+
+// Shoppers see a red "Only N left" nudge at or below URGENT_STOCK; admins are warned earlier.
+export const URGENT_STOCK = 3;
+export const LOW_STOCK = 5;
+export type StockLevel = 'out' | 'urgent' | 'low' | 'ok';
+export const stockLevel = (inventory: number): StockLevel =>
+  inventory <= 0 ? 'out' : inventory <= URGENT_STOCK ? 'urgent' : inventory <= LOW_STOCK ? 'low' : 'ok';

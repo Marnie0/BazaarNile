@@ -4,7 +4,6 @@ import express from 'express';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import { env } from './config/env.js';
-import { PostgresRateLimitStore } from './lib/rate-limit-store.js';
 import { authRouter } from './routes/auth.js';
 import { catalogRouter } from './routes/catalog.js';
 import { shoppingRouter } from './routes/shopping.js';
@@ -21,12 +20,14 @@ app.use(cors({ origin: env.CLIENT_URL.split(',').map((url) => url.trim()), crede
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 app.use('/api', (_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
-// In-memory burst guard per instance; the sensitive limiters below and in the routers use the shared store.
+// In-memory burst guard per instance; the sensitive limiters in the routers use the shared store.
 app.use('/api', rateLimit({
   windowMs: 60_000, limit: 300, standardHeaders: true, legacyHeaders: false,
   message: { message: 'Too many requests. Please slow down and try again shortly' },
 }));
-app.use('/api/auth', rateLimit({ windowMs: 15 * 60_000, limit: 100, standardHeaders: true, legacyHeaders: false, store: new PostgresRateLimitStore('auth'), passOnStoreError: true }), authRouter);
+// Auth routes carry their own targeted limiters; a blanket cap here would also count the silent
+// session refresh on every page load and lock out shoppers sharing a carrier-grade NAT address.
+app.use('/api/auth', authRouter);
 app.use('/api', catalogRouter);
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 app.use('/api', shoppingRouter);

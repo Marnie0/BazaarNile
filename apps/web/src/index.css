@@ -21,6 +21,8 @@ img { display: block; max-width: 100%; }
 :where(a, button, input, select, textarea, summary):focus-visible { outline: 3px solid #244e5a; outline-offset: 4px; }
 .container-shell { width: min(1180px, calc(100% - 2rem)); margin-inline: auto; }
 .text-balance { text-wrap: balance; }
+/* Component classes live in a layer so Tailwind utilities (w-auto, rounded-full, py-2…) can override them. */
+@layer components {
 .eyebrow { margin: 0; color: #244e5a; font-size: .78rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
 .skip-link { position: fixed; top: .75rem; left: .75rem; z-index: 100; padding: .7rem 1rem; border-radius: 999px; background: #342b25; color: #fff; font-size: .875rem; font-weight: 600; transform: translateY(-200%); transition: transform .15s ease; }
 .skip-link:focus { transform: translateY(0); }
@@ -38,6 +40,7 @@ img { display: block; max-width: 100%; }
 .chip.is-active { border-color: #342b25; background: #342b25; color: #fff; }
 .no-scrollbar { scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+}
 
 /* The Market Spread — the single expressive moment on the homepage. */
 .market-spread { height: calc(100svh - 4.5rem); background: #eadcc3; border-bottom: 1px solid rgba(52,43,37,.14); }
@@ -107,6 +110,9 @@ img { display: block; max-width: 100%; }
 .product-card__price { display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem; margin-top: .45rem; }
 .product-card__price strong { font-size: .98rem; }
 .product-card__price s { color: rgba(52,43,37,.45); font-size: .82rem; }
+.product-card__stock { display: flex; align-items: center; gap: .35rem; margin: .3rem 0 0; color: #c0262d; font-size: .8rem; font-weight: 700; }
+.product-card__stock::before { content: ""; width: .45rem; height: .45rem; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 3px rgba(192,38,45,.15); animation: stock-pulse 2s ease-in-out infinite; }
+@keyframes stock-pulse { 50% { box-shadow: 0 0 0 5px rgba(192,38,45,0); } }
 .product-card__seller { margin: .2rem 0 0; overflow: hidden; color: rgba(52,43,37,.55); font-size: .8rem; text-overflow: ellipsis; white-space: nowrap; }
 
 .recommendation-panel { padding: clamp(1.5rem, 4vw, 3.5rem); border-radius: 1.5rem; background: #eee2cf; }

@@ -28,6 +28,12 @@ const credentialLimiter = rateLimit({
   store: new PostgresRateLimitStore('credentials'), passOnStoreError: true,
   message: { message: 'Too many sign-in attempts. Please wait a few minutes and try again' },
 });
+// Caps account creation per address, counting successful sign-ups too, to slow automated spam accounts.
+const registrationLimiter = rateLimit({
+  windowMs: 60 * 60_000, limit: 20, standardHeaders: true, legacyHeaders: false,
+  store: new PostgresRateLimitStore('register'), passOnStoreError: true,
+  message: { message: 'Too many accounts were created from this network. Please try again later' },
+});
 // Compared against when the email is unknown so response time does not reveal which accounts exist.
 const dummyPasswordHash = bcrypt.hashSync('bazaarnile-timing-equalizer', 12);
 // Tabs that load at the same moment may present the same refresh token; tolerate that briefly.
@@ -44,7 +50,7 @@ async function issueSession(user: { id: string; role: string }, res: Parameters<
   return accessToken;
 }
 
-authRouter.post('/register', credentialLimiter, asyncHandler(async (req, res) => {
+authRouter.post('/register', registrationLimiter, credentialLimiter, asyncHandler(async (req, res) => {
   const data = z.object({
     email: z.email().transform((value) => value.toLowerCase()),
     username: z.string().min(3).max(30).regex(/^[a-z0-9_]+$/).transform((value) => value.toLowerCase()),

@@ -9,7 +9,7 @@ import { useAddToCart } from '../hooks/useAddToCart';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useWishlist } from '../hooks/useWishlist';
 import { api, hasAccessToken, type AiSummary, type Product } from '../lib/api';
-import { discountPercent, FREE_SHIPPING_THRESHOLD, money } from '../lib/utils';
+import { discountPercent, FREE_SHIPPING_THRESHOLD, money, stockLevel } from '../lib/utils';
 
 export function ProductPage() {
   const { slug } = useParams();
@@ -53,7 +53,8 @@ function ProductDetails({ slug }: { slug: string }) {
   const add = () => requireAccount(() => addToCart.mutate({ product: p, quantity }));
   const buyNow = () => requireAccount(() => addToCart.mutate({ product: p, quantity }, { onSuccess: () => navigate('/checkout') }));
   const relatedProducts = related.data?.products.filter((item) => item.id !== p.id).slice(0, 4) ?? [];
-  const stock = soldOut ? { label: 'Sold out', tone: 'text-red-700' } : p.inventory <= 5 ? { label: `Only ${p.inventory} left — order soon`, tone: 'text-clay' } : { label: 'In stock, ready to ship', tone: 'text-emerald-700' };
+  const urgent = stockLevel(p.inventory) === 'urgent';
+  const stock = soldOut ? { label: 'Sold out', tone: 'text-red-700' } : urgent ? { label: `Only ${p.inventory} left in stock — order soon`, tone: 'text-red-600' } : { label: 'In stock, ready to ship', tone: 'text-emerald-700' };
 
   return <main className="container-shell py-8 pb-28 sm:py-10 lg:pb-10">
     <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-sm text-ink/50"><Link to="/shop" className="hover:text-ink">Shop</Link><ChevronRight size={14} className="shrink-0"/><Link to={`/shop?category=${p.category.slug}`} className="hover:text-ink">{p.category.name}</Link><ChevronRight size={14} className="shrink-0"/><span className="truncate text-ink/75" aria-current="page">{p.name}</span></nav>
@@ -69,7 +70,7 @@ function ProductDetails({ slug }: { slug: string }) {
         <p className="eyebrow">{p.category.name}</p>
         <h1 className="mt-3 text-balance font-display text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">{p.name}</h1>
         <div className="mt-5 flex flex-wrap items-baseline gap-3"><p className="text-3xl font-bold">{money(p.price)}</p>{discount > 0 && <><s className="text-lg text-ink/40">{money(p.compareAt!)}</s><span className="rounded-full bg-clay/10 px-2.5 py-1 text-xs font-bold text-clay">You save {money(Number(p.compareAt) - Number(p.price))}</span></>}</div>
-        <p className={`mt-3 flex items-center gap-2 text-sm font-semibold ${stock.tone}`}><span className="size-2 rounded-full bg-current"/>{stock.label}</p>
+        <p className={`mt-3 flex items-center gap-2 text-sm font-semibold ${stock.tone} ${urgent ? 'w-fit rounded-full bg-red-50 px-3 py-1.5' : ''}`} role={urgent ? 'status' : undefined}><span className="size-2 rounded-full bg-current"/>{stock.label}</p>
         <p className="mt-6 whitespace-pre-line text-[1.05rem] leading-8 text-ink/70">{p.description}</p>
 
         <div className="mt-8 flex gap-2 sm:gap-3">
@@ -101,7 +102,7 @@ function ProductDetails({ slug }: { slug: string }) {
     </section>}
 
     {!soldOut && <div className="fixed inset-x-0 bottom-0 z-30 border-t border-ink/10 bg-[#fcfbf8]/95 px-4 py-3 backdrop-blur-lg lg:hidden">
-      <div className="mx-auto flex max-w-xl items-center gap-3"><div className="min-w-0 flex-1"><p className="truncate text-xs text-ink/55">{p.name}</p><p className="font-bold">{money(Number(p.price) * quantity)}</p></div><Button disabled={addToCart.isPending} onClick={add}>{addToCart.isPending ? 'Adding…' : 'Add to cart'}</Button></div>
+      <div className="mx-auto flex max-w-xl items-center gap-3"><div className="min-w-0 flex-1">{urgent ? <p className="truncate text-xs font-bold text-red-600">Only {p.inventory} left</p> : <p className="truncate text-xs text-ink/55">{p.name}</p>}<p className="font-bold">{money(Number(p.price) * quantity)}</p></div><Button disabled={addToCart.isPending} onClick={add}>{addToCart.isPending ? 'Adding…' : 'Add to cart'}</Button></div>
     </div>}
   </main>;
 }

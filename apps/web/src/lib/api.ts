@@ -131,9 +131,10 @@ export type AdminUser = User & { id: string; email: string; status: 'ACTIVE' | '
 export type AdminProduct = SellerProduct & { seller: Pick<AdminUser, 'id' | 'username' | 'displayName' | 'avatarUrl'> };
 export type AdminOrder = Order & { user: Pick<AdminUser, 'id' | 'username' | 'displayName' | 'email'> };
 export type AdminOverview = {
-  metrics: { totalUsers: number; newUsers: number; sellers: number; suspendedUsers: number; totalProducts: number; activeProducts: number; pendingProducts: number; totalOrders: number; openOrders: number; grossMerchandiseValue: string; averageOrderValue: string; totalDiscounts: string; couponOrders: number; repeatCustomerRate: string };
+  metrics: { totalUsers: number; newUsers: number; sellers: number; suspendedUsers: number; totalProducts: number; activeProducts: number; pendingProducts: number; lowStockProducts: number; outOfStockProducts: number; totalOrders: number; openOrders: number; grossMerchandiseValue: string; averageOrderValue: string; totalDiscounts: string; couponOrders: number; repeatCustomerRate: string };
   chart: { date: string; revenue: string; orders: number }[];
   topSellers: { id: string; displayName: string; username: string; avatarUrl?: string; revenue: string; orders: number }[];
   categorySales: { name: string; revenue: string; units: number }[];
   recentUsers: AdminUser[];
 };
+export type InventorySummary = { products: number; unitsInStock: number; stockValue: string; outOfStock: number; lowStock: number; healthy: number; lowStockThreshold: number };

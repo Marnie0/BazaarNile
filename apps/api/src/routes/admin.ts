@@ -8,6 +8,8 @@ import { asyncHandler } from '../utils/async-handler.js';
 import { AppError } from '../utils/errors.js';
 
 export const adminRouter = Router();
+// Products at or below this many units are flagged as running low in the admin panel.
+const LOW_STOCK_THRESHOLD = 5;
 adminRouter.use('/admin', requireAuth, requireAdmin);
 
 const safeUser = {
@@ -26,7 +28,7 @@ adminRouter.get('/admin/overview', asyncHandler(async (_req, res) => {
   const live = { status: { not: OrderStatus.CANCELLED } } satisfies Prisma.OrderWhereInput;
 
   const [totalUsers, newUsers, sellers, suspendedUsers, totalProducts, activeProducts, pendingProducts, totalOrders, openOrders, recentUsers,
-    orderTotals, couponOrders, windowOrders, [customers], sellerSales, categorySales] = await Promise.all([
+    lowStockProducts, outOfStockProducts, orderTotals, couponOrders, windowOrders, [customers], sellerSales, categorySales] = await Promise.all([
     prisma.user.count(),
     prisma.user.count({ where: { createdAt: { gte: monthAgo } } }),
     prisma.user.count({ where: { role: Role.SELLER } }),
@@ -37,6 +39,8 @@ adminRouter.get('/admin/overview', asyncHandler(async (_req, res) => {
     prisma.order.count(),
     prisma.order.count({ where: { status: { notIn: [OrderStatus.DELIVERED, OrderStatus.CANCELLED] } } }),
     prisma.user.findMany({ orderBy: { createdAt: 'desc' }, take: 6, select: safeUser }),
+    prisma.product.count({ where: { status: ProductStatus.ACTIVE, inventory: { gt: 0, lte: LOW_STOCK_THRESHOLD } } }),
+    prisma.product.count({ where: { status: ProductStatus.ACTIVE, inventory: 0 } }),
     prisma.order.aggregate({ where: live, _sum: { subtotal: true, discount: true }, _count: { _all: true } }),
     prisma.order.count({ where: { ...live, discount: { gt: 0 } } }),
     prisma.order.findMany({ where: { ...live, createdAt: { gte: since } }, select: { subtotal: true, createdAt: true } }),
@@ -77,6 +81,7 @@ adminRouter.get('/admin/overview', asyncHandler(async (_req, res) => {
   res.json({
     metrics: {
       totalUsers, newUsers, sellers, suspendedUsers, totalProducts, activeProducts, pendingProducts,
+      lowStockProducts, outOfStockProducts,
       totalOrders, openOrders, grossMerchandiseValue: grossMerchandiseValue.toString(),
       averageOrderValue: liveOrders ? grossMerchandiseValue.div(liveOrders).toFixed(2) : '0',
       totalDiscounts: (orderTotals._sum.discount ?? new Prisma.Decimal(0)).toString(), couponOrders,
@@ -244,10 +249,17 @@ adminRouter.patch('/admin/users/:id', asyncHandler(async (req, res) => {
 adminRouter.get('/admin/products', asyncHandler(async (req, res) => {
   const query = z.object({
     search: z.string().trim().max(100).optional(), status: z.enum(ProductStatus).optional(),
+    stock: z.enum(['out', 'low', 'in']).optional(), sort: z.enum(['updated', 'stock-asc', 'stock-desc', 'name']).default('updated'),
     page: z.coerce.number().int().positive().default(1), limit: z.coerce.number().int().min(1).max(50).default(20),
   }).parse(req.query);
+  const stockFilter = { out: { equals: 0 }, low: { gt: 0, lte: LOW_STOCK_THRESHOLD }, in: { gt: LOW_STOCK_THRESHOLD } } as const;
+  const orderBy: Prisma.ProductOrderByWithRelationInput[] = {
+    updated: [{ updatedAt: 'desc' as const }], name: [{ name: 'asc' as const }],
+    'stock-asc': [{ inventory: 'asc' as const }, { name: 'asc' as const }], 'stock-desc': [{ inventory: 'desc' as const }, { name: 'asc' as const }],
+  }[query.sort];
   const where: Prisma.ProductWhereInput = {
     ...(query.status && { status: query.status }),
+    ...(query.stock && { inventory: stockFilter[query.stock] }),
     ...(query.search && { OR: [
       { name: { contains: query.search, mode: 'insensitive' } },
       { seller: { displayName: { contains: query.search, mode: 'insensitive' } } },
@@ -259,10 +271,24 @@ adminRouter.get('/admin/products', asyncHandler(async (req, res) => {
     _count: { select: { orderItems: true } },
   } as const;
   const [products, total] = await prisma.$transaction([
-    prisma.product.findMany({ where, orderBy: { updatedAt: 'desc' }, skip: (query.page - 1) * query.limit, take: query.limit, include }),
+    prisma.product.findMany({ where, orderBy, skip: (query.page - 1) * query.limit, take: query.limit, include }),
     prisma.product.count({ where }),
   ]);
   res.json({ products, pagination: { page: query.page, limit: query.limit, total, pages: Math.ceil(total / query.limit) } });
+}));
+
+// Stock health across every listing that is not archived.
+adminRouter.get('/admin/inventory/summary', asyncHandler(async (_req, res) => {
+  const [row] = await prisma.$queryRaw<{ products: bigint; units: bigint | null; value: Prisma.Decimal | null; out: bigint; low: bigint }[]>`
+    SELECT COUNT(*) AS "products", SUM("inventory") AS "units", SUM("inventory" * "price") AS "value",
+      COUNT(*) FILTER (WHERE "inventory" = 0) AS "out",
+      COUNT(*) FILTER (WHERE "inventory" > 0 AND "inventory" <= ${LOW_STOCK_THRESHOLD}) AS "low"
+    FROM "Product" WHERE "status" <> 'ARCHIVED'`;
+  const products = Number(row?.products ?? 0); const out = Number(row?.out ?? 0); const low = Number(row?.low ?? 0);
+  res.json({ summary: {
+    products, unitsInStock: Number(row?.units ?? 0), stockValue: (row?.value ?? new Prisma.Decimal(0)).toString(),
+    outOfStock: out, lowStock: low, healthy: products - out - low, lowStockThreshold: LOW_STOCK_THRESHOLD,
+  } });
 }));
 
 adminRouter.patch('/admin/products/:id/moderate', asyncHandler(async (req, res) => {
