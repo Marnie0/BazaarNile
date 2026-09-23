@@ -18,8 +18,8 @@ catalogRouter.get('/categories', asyncHandler(async (_req, res) => {
 
 catalogRouter.get('/products', asyncHandler(async (req, res) => {
   const query = z.object({
-    search: z.string().trim().max(100).optional(), category: z.string().optional(),
-    featured: z.enum(['true', 'false']).optional(), page: z.coerce.number().int().positive().default(1),
+    search: z.string().trim().max(100).optional(), category: z.string().max(80).optional(),
+    featured: z.enum(['true', 'false']).optional(), onSale: z.enum(['true']).optional(), inStock: z.enum(['true']).optional(), page: z.coerce.number().int().positive().default(1),
     limit: z.coerce.number().int().min(1).max(48).default(12),
     sort: z.enum(['newest', 'price-asc', 'price-desc']).default('newest'),
   }).parse(req.query);
@@ -27,6 +27,8 @@ catalogRouter.get('/products', asyncHandler(async (req, res) => {
     status: ProductStatus.ACTIVE,
     ...(query.category && { category: { slug: query.category } }),
     ...(query.featured && { featured: query.featured === 'true' }),
+    ...(query.onSale && { compareAt: { not: null } }),
+    ...(query.inStock && { inventory: { gt: 0 } }),
     ...(query.search && { OR: [
       { name: { contains: query.search, mode: 'insensitive' } },
       { description: { contains: query.search, mode: 'insensitive' } },
@@ -113,6 +115,23 @@ catalogRouter.get('/recommendations', requireAuth, asyncHandler(async (req, res)
     return { product, score: categoryScore + textScore + priceScore + (product.featured ? 1 : 0) };
   }).sort((a, b) => b.score - a.score);
   res.json({ products: scored.slice(0, limit).map(({ product }) => product), personalized: true, reason: 'Inspired by products you viewed' });
+}));
+
+// Independent shops with live listings, busiest first.
+catalogRouter.get('/shops', asyncHandler(async (req, res) => {
+  const { limit } = z.object({ limit: z.coerce.number().int().min(1).max(24).default(8) }).parse(req.query);
+  const groups = await prisma.product.groupBy({ by: ['sellerId'], where: { status: ProductStatus.ACTIVE }, _count: { _all: true },
+    orderBy: { _count: { sellerId: 'desc' } }, take: limit });
+  const sellers = await prisma.user.findMany({ where: { id: { in: groups.map((group) => group.sellerId) }, status: 'ACTIVE' },
+    select: { id: true, username: true, displayName: true, avatarUrl: true, bio: true,
+      products: { where: { status: ProductStatus.ACTIVE }, orderBy: [{ featured: 'desc' }, { createdAt: 'desc' }], take: 3, select: { imageUrl: true } } } });
+  const byId = new Map(sellers.map((seller) => [seller.id, seller]));
+  res.json({ shops: groups.flatMap((group) => {
+    const seller = byId.get(group.sellerId);
+    if (!seller) return [];
+    const { id: _id, products, ...profile } = seller; void _id;
+    return [{ ...profile, productCount: group._count._all, previewImages: products.map((product) => product.imageUrl) }];
+  }) });
 }));
 
 catalogRouter.get('/profiles/:username', asyncHandler(async (req, res) => {

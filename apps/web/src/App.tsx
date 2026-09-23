@@ -7,6 +7,7 @@ import { EmptyState, PageLoader } from './components/PageState';
 import { ScrollToTop } from './components/ScrollToTop';
 import { Toaster } from './components/Toaster';
 import { Button } from './components/ui/Button';
+import { ConfirmDialogHost } from './components/ui/ConfirmDialog';
 import { HomePage } from './pages/HomePage';
 
 // The storefront landing page ships in the main bundle; everything else loads on demand so
@@ -66,5 +67,6 @@ export default function App() {
     </div>
     <Footer/>
     <Toaster/>
+    <ConfirmDialogHost/>
   </div>;
 }

@@ -21,6 +21,8 @@ export function ShopPage() {
   const search = params.get('search') ?? '';
   const category = params.get('category') ?? '';
   const featured = params.get('featured') === 'true';
+  const onSale = params.get('onSale') === 'true';
+  const inStock = params.get('inStock') === 'true';
   const sort = params.get('sort') ?? 'newest';
   const [draft, setDraft] = useState(search);
   useEffect(() => setDraft(search), [search]);
@@ -35,11 +37,13 @@ export function ShopPage() {
   };
   const submitSearch = (event: FormEvent) => { event.preventDefault(); update({ search: draft.trim() }); };
   const activeCategory = cats?.categories.find((item) => item.slug === category);
-  const title = search ? <>Results for “{search}”</> : activeCategory?.name ?? (featured ? 'Featured finds' : 'The Bazaar');
+  const title = search ? <>Results for “{search}”</> : activeCategory?.name ?? (onSale ? 'Deals of the week' : featured ? 'Featured finds' : 'The Bazaar');
   const filters = [
     ...(search ? [{ key: 'search', label: `“${search}”` }] : []),
     ...(activeCategory ? [{ key: 'category', label: activeCategory.name }] : []),
     ...(featured ? [{ key: 'featured', label: 'Featured' }] : []),
+    ...(onSale ? [{ key: 'onSale', label: 'On sale' }] : []),
+    ...(inStock ? [{ key: 'inStock', label: 'In stock' }] : []),
   ];
   const pagination = data?.pagination;
   const firstShown = pagination && pagination.total ? (pagination.page - 1) * pagination.limit + 1 : 0;
@@ -59,12 +63,15 @@ export function ShopPage() {
           <Button type="submit" className="px-4 py-2">Search</Button>
         </form>
         <label className="flex items-center gap-2 text-sm font-medium text-ink/60"><span className="shrink-0">Sort by</span>
-          <select value={sort} onChange={(event) => update({ sort: event.target.value === 'newest' ? '' : event.target.value })} className="field rounded-full py-2.5 pr-8 text-ink">{sorts.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+          <select value={sort} onChange={(event) => update({ sort: event.target.value === 'newest' ? '' : event.target.value })} className="field select-field rounded-full py-2.5 pr-8 text-ink">{sorts.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
         </label>
       </div>
       <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-0.5" role="group" aria-label="Filter by category">
         <button type="button" onClick={() => update({ category: '' })} aria-pressed={!category} className={`chip ${!category ? 'is-active' : ''}`}>All</button>
+        <button type="button" onClick={() => update({ onSale: onSale ? '' : 'true' })} aria-pressed={onSale} className={`chip ${onSale ? 'is-active' : ''}`}>On sale</button>
+        <button type="button" onClick={() => update({ inStock: inStock ? '' : 'true' })} aria-pressed={inStock} className={`chip ${inStock ? 'is-active' : ''}`}>In stock</button>
         <button type="button" onClick={() => update({ featured: featured ? '' : 'true' })} aria-pressed={featured} className={`chip ${featured ? 'is-active' : ''}`}>Featured</button>
+        <span className="mx-1 w-px shrink-0 self-stretch bg-ink/12" aria-hidden="true"/>
         {cats?.categories.map((item) => <button type="button" key={item.id} onClick={() => update({ category: item.slug === category ? '' : item.slug })} aria-pressed={item.slug === category} className={`chip ${item.slug === category ? 'is-active' : ''}`}>{item.name}{item._count && <span className="opacity-55">{item._count.products}</span>}</button>)}
       </div>
     </div>

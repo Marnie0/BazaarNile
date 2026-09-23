@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthRequired } from '../components/AuthRequired';
 import { EmptyState, PageIntro, PageLoader } from '../components/PageState';
+import { Field, Input, Textarea } from '../components/ui/Field';
 import { Button } from '../components/ui/Button';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { api, ApiError, type Cart, type CouponValidation, type Order } from '../lib/api';
@@ -50,12 +51,12 @@ export function CheckoutPage() {
     <div className="mt-8 grid items-start gap-8 lg:grid-cols-[1fr_380px] lg:gap-10">
       <form id="checkout-form" onSubmit={submit} className="surface grid gap-5 p-6 sm:grid-cols-2 sm:p-8">
         <h2 className="font-display text-2xl font-semibold sm:col-span-2">Where should we deliver?</h2>
-        <label className="field-label">Full name<input className="field" name="shippingName" autoComplete="name" required minLength={2} maxLength={80}/></label>
-        <label className="field-label">Phone number<input className="field" name="shippingPhone" type="tel" inputMode="tel" autoComplete="tel" required minLength={8} maxLength={20} pattern="[\d\s+\-\(\)]{8,20}" title="8–20 digits; spaces, +, - and brackets are allowed" placeholder="01X XXXX XXXX"/><span className="field-hint">The courier will call this number on delivery.</span></label>
-        <label className="field-label sm:col-span-2">Street address<input className="field" name="shippingAddress" autoComplete="street-address" required minLength={3} maxLength={200} placeholder="Building, street, floor, apartment"/></label>
-        <label className="field-label">City / district<input className="field" name="shippingCity" autoComplete="address-level2" required minLength={2} maxLength={80}/></label>
+        <Field label="Full name"><Input name="shippingName" autoComplete="name" required minLength={2} maxLength={80}/></Field>
+        <Field label="Phone number" hint="The courier will call this number on delivery."><Input name="shippingPhone" type="tel" inputMode="tel" autoComplete="tel" required minLength={8} maxLength={20} pattern="[\d\s+\-\(\)]{8,20}" title="8–20 digits; spaces, +, - and brackets are allowed" placeholder="01X XXXX XXXX"/></Field>
+        <Field label="Street address" className="sm:col-span-2"><Input name="shippingAddress" autoComplete="street-address" required minLength={3} maxLength={200} placeholder="Building, street, floor, apartment"/></Field>
+        <Field label="City / district"><Input name="shippingCity" autoComplete="address-level2" required minLength={2} maxLength={80}/></Field>
         <label className="field-label">Governorate<input className="field" name="shippingRegion" list="governorates" autoComplete="address-level1" required minLength={2} maxLength={80}/><datalist id="governorates">{governorates.map((name) => <option key={name} value={name}/>)}</datalist></label>
-        <label className="field-label sm:col-span-2">Delivery notes <span className="field-hint">Optional — landmarks, best time to call</span><textarea className="field min-h-24 resize-y" name="notes" maxLength={500}/></label>
+        <Field label="Delivery notes" hint="Optional — landmarks, best time to call" className="sm:col-span-2"><Textarea className="min-h-24 resize-y" name="notes" maxLength={500}/></Field>
         <div className="flex items-center gap-3 rounded-xl bg-sand p-4 text-sm sm:col-span-2"><Banknote size={20} className="shrink-0 text-nile"/><div><strong className="block">Cash on delivery</strong><span className="text-ink/60">Pay the courier when your order arrives.</span></div></div>
       </form>
 

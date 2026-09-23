@@ -114,7 +114,8 @@ export function Header() {
         <button type="button" onClick={() => setMobileOpen((open) => !open)} className="grid size-10 place-items-center rounded-full transition hover:bg-nile-light/60 lg:hidden" aria-label={mobileOpen ? 'Close menu' : 'Open menu'} aria-expanded={mobileOpen} aria-controls="mobile-menu">{mobileOpen ? <X size={21}/> : <Menu size={21}/>}</button>
       </div>
     </div>
-    <div className="container-shell pb-3 md:hidden"><SearchForm/></div>
+    {/* The homepage hero has its own prominent search, so skip the duplicate on phones. */}
+    {location.pathname !== '/' && <div className="container-shell pb-3 md:hidden"><SearchForm/></div>}
     <AnimatePresence>{mobileOpen && <motion.div id="mobile-menu" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: .2 }} className="overflow-hidden border-t border-ink/8 bg-[#fcfbf8] lg:hidden">
       <div className="container-shell max-h-[calc(100svh-8rem)] overflow-y-auto py-4">
         {user && <div className="mb-4 flex items-center gap-3 rounded-2xl bg-sand/70 p-3"><span className="grid size-10 place-items-center rounded-full bg-nile font-bold uppercase text-white">{user.displayName.charAt(0)}</span><div className="min-w-0"><p className="truncate font-semibold">{user.displayName}</p><p className="truncate text-xs text-ink/50">@{user.username}</p></div></div>}

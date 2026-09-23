@@ -6,11 +6,12 @@ import { EmptyState, PageIntro, PageLoader } from '../components/PageState';
 import { toast, toastError } from '../lib/toast';
 import { Button } from '../components/ui/Button';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
+import { confirmAction } from '../lib/confirm';
+import { Badge } from '../components/ui/Badge';
+import { orderStatus } from '../lib/status';
 import { api, ApiError, type Order, type OrderStatus } from '../lib/api';
 import { formatDate, money } from '../lib/utils';
 
-const statusStyle: Record<Order['status'], string> = { PENDING: 'bg-amber-100 text-amber-800', CONFIRMED: 'bg-blue-100 text-blue-800', PROCESSING: 'bg-violet-100 text-violet-800', SHIPPED: 'bg-cyan-100 text-cyan-800', DELIVERED: 'bg-emerald-100 text-emerald-800', CANCELLED: 'bg-red-100 text-red-700' };
-const statusLabel: Record<Order['status'], string> = { PENDING: 'Placed', CONFIRMED: 'Confirmed', PROCESSING: 'Processing', SHIPPED: 'On the way', DELIVERED: 'Delivered', CANCELLED: 'Cancelled' };
 const progress: { status: Exclude<OrderStatus, 'CANCELLED'>; label: string }[] = [
   { status: 'PENDING', label: 'Placed' }, { status: 'CONFIRMED', label: 'Confirmed' }, { status: 'PROCESSING', label: 'Processing' },
   { status: 'SHIPPED', label: 'Shipped' }, { status: 'DELIVERED', label: 'Delivered' },
@@ -41,7 +42,7 @@ export function OrdersPage() {
     {placed && <div className="mb-8 flex items-start gap-3 rounded-2xl bg-nile-light p-5 text-nile" role="status"><CheckCircle2 className="mt-0.5 shrink-0"/><div className="flex-1"><strong>Thank you — your order is placed</strong><p className="text-sm">Order {placed} is being prepared. You’ll pay in cash on delivery, and we’ll notify you as it moves.</p></div><button type="button" onClick={() => setParams({}, { replace: true })} aria-label="Dismiss" className="grid size-8 shrink-0 place-items-center rounded-full hover:bg-white/50"><X size={16}/></button></div>}
     <PageIntro eyebrow="Your purchases" title="Orders">{orders.length > 0 && `${orders.length} order${orders.length === 1 ? '' : 's'}`}</PageIntro>
     {!orders.length ? <EmptyState icon={PackageOpen} title="No orders yet" action={<Button asChild><Link to="/shop">Start shopping</Link></Button>}>When you place an order, you can track it here.</EmptyState> : <div className="mt-8 grid gap-5">{orders.map((order) => <article key={order.id} className="surface p-5 sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs text-ink/50">Order · {formatDate(order.createdAt, { dateStyle: 'long' })}</p><h2 className="font-semibold tracking-wide">{order.orderNumber}</h2></div><span className={`rounded-full px-3 py-1 text-xs font-bold ${statusStyle[order.status]}`}>{statusLabel[order.status]}</span></div>
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs text-ink/50">Order · {formatDate(order.createdAt, { dateStyle: 'long' })}</p><h2 className="font-semibold tracking-wide">{order.orderNumber}</h2></div><Badge tone={orderStatus[order.status].tone}>{orderStatus[order.status].label}</Badge></div>
       <OrderProgress order={order}/>
       <div className="no-scrollbar mt-5 flex gap-2 overflow-x-auto border-t border-ink/8 pt-5">{order.items.map((item) => <Link to={`/products/${item.productSlug}`} key={item.id} title={`${item.productName} × ${item.quantity}`} className="relative shrink-0"><img src={item.imageUrl} alt={item.productName} className="size-16 rounded-xl object-cover"/>{item.quantity > 1 && <span className="absolute -right-1 -top-1 grid size-5 place-items-center rounded-full bg-ink text-[10px] font-bold text-white">{item.quantity}</span>}</Link>)}</div>
       <details className="group mt-4 rounded-xl bg-sand/50 px-4 py-3 text-sm"><summary className="flex cursor-pointer list-none items-center justify-between font-semibold [&::-webkit-details-marker]:hidden">Order details<ChevronDown size={16} className="transition group-open:rotate-180"/></summary>
@@ -51,7 +52,7 @@ export function OrdersPage() {
             <dl className="mt-3 grid gap-1.5 border-t border-ink/10 pt-3"><div className="flex justify-between"><dt className="text-ink/60">Subtotal</dt><dd>{money(order.subtotal)}</dd></div><div className="flex justify-between"><dt className="text-ink/60">Shipping</dt><dd>{Number(order.shippingFee) ? money(order.shippingFee) : 'Free'}</dd></div>{Number(order.discount) > 0 && <div className="flex justify-between text-nile"><dt>Discount{order.couponCode ? ` (${order.couponCode})` : ''}</dt><dd>−{money(order.discount)}</dd></div>}<div className="flex justify-between font-bold"><dt>Total</dt><dd>{money(order.total)}</dd></div></dl></div>
         </div>
       </details>
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-4"><p className="text-sm text-ink/60">{order.items.reduce((sum, item) => sum + item.quantity, 0)} items · Cash on delivery</p><div className="flex items-center gap-4">{(order.status === 'PENDING' || order.status === 'CONFIRMED') && <button type="button" onClick={() => { if (window.confirm(`Cancel order ${order.orderNumber}? This can’t be undone.`)) cancel.mutate(order.orderNumber); }} disabled={cancel.isPending} className="text-sm font-semibold text-red-700 hover:underline disabled:opacity-50">{cancel.isPending && cancel.variables === order.orderNumber ? 'Cancelling…' : 'Cancel order'}</button>}<p className="text-lg font-bold">{money(order.total)}</p></div></div>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-4"><p className="text-sm text-ink/60">{order.items.reduce((sum, item) => sum + item.quantity, 0)} items · Cash on delivery</p><div className="flex items-center gap-4">{(order.status === 'PENDING' || order.status === 'CONFIRMED') && <button type="button" onClick={async () => { if (await confirmAction({ title: 'Cancel this order?', message: `Order ${order.orderNumber} will be cancelled and won’t be delivered. This can’t be undone.`, confirmLabel: 'Cancel order', cancelLabel: 'Keep order', tone: 'danger' })) cancel.mutate(order.orderNumber); }} disabled={cancel.isPending} className="text-sm font-semibold text-red-700 hover:underline disabled:opacity-50">{cancel.isPending && cancel.variables === order.orderNumber ? 'Cancelling…' : 'Cancel order'}</button>}<p className="text-lg font-bold">{money(order.total)}</p></div></div>
     </article>)}</div>}
   </main>;
 }

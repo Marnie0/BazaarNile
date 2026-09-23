@@ -138,3 +138,4 @@ export type AdminOverview = {
   recentUsers: AdminUser[];
 };
 export type InventorySummary = { products: number; unitsInStock: number; stockValue: string; outOfStock: number; lowStock: number; healthy: number; lowStockThreshold: number };
+export type Shop = { username: string; displayName: string; avatarUrl?: string; bio?: string; productCount: number; previewImages: string[] };

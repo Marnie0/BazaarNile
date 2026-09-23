@@ -3,7 +3,9 @@ import { AlertTriangle, Boxes, CircleDollarSign, Minus, PackageCheck, PackageX, 
 import { useState, type KeyboardEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
-import { api, type AdminProduct, type InventorySummary, type ProductStatus } from '../../lib/api';
+import { Badge } from '../ui/Badge';
+import { productStatus } from '../../lib/status';
+import { api, type AdminProduct, type InventorySummary } from '../../lib/api';
 import { toast, toastError } from '../../lib/toast';
 import { money, stockLevel, type StockLevel } from '../../lib/utils';
 import { Button } from '../ui/Button';
@@ -13,10 +15,6 @@ type Sort = 'stock-asc' | 'stock-desc' | 'name' | 'updated';
 type Pagination = { page: number; limit: number; total: number; pages: number };
 
 const MAX_STOCK = 1_000_000;
-const statusStyle: Record<ProductStatus, string> = {
-  ACTIVE: 'bg-emerald-100 text-emerald-800', PENDING: 'bg-blue-100 text-blue-800', REJECTED: 'bg-red-100 text-red-700',
-  DRAFT: 'bg-amber-100 text-amber-800', ARCHIVED: 'bg-slate-100 text-slate-600',
-};
 const levelStyle: Record<StockLevel, { bar: string; text: string; label: (units: number) => string }> = {
   out: { bar: 'bg-red-600', text: 'text-red-700', label: () => 'Out of stock' },
   urgent: { bar: 'bg-red-500', text: 'text-red-700', label: (units) => `Only ${units} left` },
@@ -66,7 +64,7 @@ function InventoryRow({ product }: { product: AdminProduct }) {
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           {product.status === 'ACTIVE' ? <Link to={`/products/${product.slug}`} className="truncate font-semibold hover:text-clay">{product.name}</Link> : <p className="truncate font-semibold">{product.name}</p>}
-          {product.status !== 'ACTIVE' && <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${statusStyle[product.status]}`}>{product.status}</span>}
+          {product.status !== 'ACTIVE' && <Badge tone={productStatus[product.status].tone} title={productStatus[product.status].help}>{productStatus[product.status].label}</Badge>}
         </div>
         <p className="mt-0.5 truncate text-xs text-ink/55">{product.category.name} · {money(product.price)} · {product.seller.displayName}</p>
       </div>
@@ -123,7 +121,7 @@ export function InventoryPanel() {
       <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 lg:mx-0 lg:px-0" role="group" aria-label="Filter by stock level">{filters.map(({ id, label }) => <button key={label} type="button" onClick={() => choose(id)} aria-pressed={filter === id} className={`chip ${filter === id ? 'is-active' : ''}`}>{label}{id === 'low' && data?.lowStock ? <span className="opacity-60">{data.lowStock}</span> : id === 'out' && data?.outOfStock ? <span className="opacity-60">{data.outOfStock}</span> : null}</button>)}</div>
       <div className="flex gap-2">
         <label className="flex min-w-0 flex-1 items-center gap-2 rounded-full border border-ink/12 bg-white pl-4 pr-1.5 focus-within:border-nile/50 lg:w-64 lg:flex-none"><Search size={16} className="shrink-0 text-ink/40"/><input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search products…" aria-label="Search inventory" className="min-w-0 flex-1 bg-transparent py-2.5 text-sm outline-none [&::-webkit-search-cancel-button]:hidden"/>{search && <button type="button" onClick={() => setSearch('')} aria-label="Clear search" className="grid size-7 place-items-center rounded-full text-ink/40 hover:bg-sand"><X size={14}/></button>}</label>
-        <select value={sort} onChange={(event) => { setSort(event.target.value as Sort); setPage(1); }} aria-label="Sort inventory" className="field w-auto rounded-full py-2.5 text-sm"><option value="stock-asc">Lowest stock first</option><option value="stock-desc">Highest stock first</option><option value="name">Name A–Z</option><option value="updated">Recently updated</option></select>
+        <select value={sort} onChange={(event) => { setSort(event.target.value as Sort); setPage(1); }} aria-label="Sort inventory" className="field select-field w-auto rounded-full py-2.5 text-sm"><option value="stock-asc">Lowest stock first</option><option value="stock-desc">Highest stock first</option><option value="name">Name A–Z</option><option value="updated">Recently updated</option></select>
       </div>
     </div>
 
