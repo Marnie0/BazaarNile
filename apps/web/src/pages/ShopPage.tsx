@@ -6,6 +6,7 @@ import { ProductCard } from '../components/ProductCard';
 import { EmptyState, PageIntro } from '../components/PageState';
 import { ProductSkeleton } from '../components/Skeleton';
 import { Button } from '../components/ui/Button';
+import { ScrollRow } from '../components/ui/ScrollRow';
 import { api, type Category, type Product } from '../lib/api';
 
 type ProductPage = { products: Product[]; pagination: { page: number; limit: number; total: number; pages: number } };
@@ -66,14 +67,14 @@ export function ShopPage() {
           <select value={sort} onChange={(event) => update({ sort: event.target.value === 'newest' ? '' : event.target.value })} className="field select-field rounded-full py-2.5 pr-8 text-ink">{sorts.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
         </label>
       </div>
-      <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-0.5" role="group" aria-label="Filter by category">
+      <ScrollRow frameClassName="-mx-4 mt-3" className="no-scrollbar flex gap-2 overflow-x-auto px-4 pb-0.5" role="group" aria-label="Filter by category">
         <button type="button" onClick={() => update({ category: '' })} aria-pressed={!category} className={`chip ${!category ? 'is-active' : ''}`}>All</button>
         <button type="button" onClick={() => update({ onSale: onSale ? '' : 'true' })} aria-pressed={onSale} className={`chip ${onSale ? 'is-active' : ''}`}>On sale</button>
         <button type="button" onClick={() => update({ inStock: inStock ? '' : 'true' })} aria-pressed={inStock} className={`chip ${inStock ? 'is-active' : ''}`}>In stock</button>
         <button type="button" onClick={() => update({ featured: featured ? '' : 'true' })} aria-pressed={featured} className={`chip ${featured ? 'is-active' : ''}`}>Featured</button>
         <span className="mx-1 w-px shrink-0 self-stretch bg-ink/12" aria-hidden="true"/>
         {cats?.categories.map((item) => <button type="button" key={item.id} onClick={() => update({ category: item.slug === category ? '' : item.slug })} aria-pressed={item.slug === category} className={`chip ${item.slug === category ? 'is-active' : ''}`}>{item.name}{item._count && <span className="opacity-55">{item._count.products}</span>}</button>)}
-      </div>
+      </ScrollRow>
     </div>
 
     <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-sm text-ink/60" aria-live="polite">

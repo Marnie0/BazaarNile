@@ -9,6 +9,7 @@ import { Button } from '../components/ui/Button';
 import { useIsAuthenticated } from '../hooks/useSession';
 import { api, type Category, type Product, type Recommendations, type Shop } from '../lib/api';
 import { discountPercent, FREE_SHIPPING_THRESHOLD, money } from '../lib/utils';
+import { ScrollRow } from '../components/ui/ScrollRow';
 
 const popularSearches = ['Coffee', 'Sneakers', 'Skincare', 'Lamp', 'Notebook', 'Tent'];
 type ProductList = { products: Product[]; pagination: { total: number } };
@@ -59,14 +60,14 @@ function Hero({ deals, productCount }: { deals: Product[]; productCount?: number
 function CategoryStrip({ categories }: { categories?: Category[] }) {
   return <section className="container-shell pt-10 sm:pt-14" aria-labelledby="categories-title">
     <SectionHeading id="categories-title" title="Shop by category" action={<ViewAll to="/shop">Browse all</ViewAll>}/>
-    <div className="no-scrollbar -mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 lg:mx-0 lg:grid lg:grid-cols-8 lg:overflow-visible lg:px-0">
+    <ScrollRow frameClassName="-mx-4 lg:mx-0" className="no-scrollbar flex snap-x gap-3 overflow-x-auto px-4 pb-1 lg:grid lg:grid-cols-8 lg:overflow-visible lg:px-0">
       {!categories && Array.from({ length: 8 }, (_, index) => <div key={index} className="h-40 w-32 shrink-0 animate-pulse rounded-2xl bg-ink/6 lg:w-auto"/>)}
       {categories?.map((category) => <Link key={category.id} to={`/shop?category=${category.slug}`} className="group w-32 shrink-0 snap-start rounded-2xl border border-ink/8 bg-white p-2.5 text-center transition hover:-translate-y-0.5 hover:border-ink/20 hover:shadow-[0_12px_30px_rgba(19,33,27,.08)] lg:w-auto">
         <span className="block aspect-square overflow-hidden rounded-xl bg-sand">{category.imageUrl && <img src={category.imageUrl.replace('w=900', 'w=300')} alt="" loading="lazy" className="size-full object-cover transition duration-500 group-hover:scale-105"/>}</span>
         <span className="mt-2.5 block truncate text-sm font-semibold leading-tight">{category.name}</span>
         <span className="block text-xs text-ink/50">{category._count?.products ?? 0} items</span>
       </Link>)}
-    </div>
+    </ScrollRow>
   </section>;
 }
 
@@ -94,7 +95,7 @@ function ShopsToKnow({ shops }: { shops?: Shop[] }) {
   if (shops && !shops.length) return null;
   return <section className="container-shell home-block" aria-labelledby="shops-title">
     <SectionHeading id="shops-title" title="Shops to know" description="Independent sellers with a point of view."/>
-    <div className="no-scrollbar -mx-4 flex snap-x gap-4 overflow-x-auto px-4 pb-1 md:mx-0 md:grid md:grid-cols-2 md:overflow-visible md:px-0 lg:grid-cols-4">
+    <ScrollRow frameClassName="-mx-4 md:mx-0" className="no-scrollbar flex snap-x gap-4 overflow-x-auto px-4 pb-1 md:grid md:grid-cols-2 md:overflow-visible md:px-0 lg:grid-cols-4">
       {!shops && Array.from({ length: 4 }, (_, index) => <div key={index} className="h-72 w-72 shrink-0 animate-pulse rounded-[1.5rem] bg-ink/6 md:w-auto"/>)}
       {shops?.slice(0, 8).map((shop) => <Link key={shop.username} to={`/profiles/${shop.username}`} className="group w-72 shrink-0 snap-start overflow-hidden rounded-[1.5rem] border border-ink/8 bg-white transition hover:-translate-y-0.5 hover:shadow-[0_16px_40px_rgba(19,33,27,.1)] md:w-auto">
         <div className="grid h-36 grid-cols-3 gap-0.5 bg-sand">{[0, 1, 2].map((index) => <span key={index} className="overflow-hidden bg-[#eadcc3]">{shop.previewImages[index] && <img src={shop.previewImages[index]!.replace('w=1000', 'w=300')} alt="" loading="lazy" className="size-full object-cover transition duration-500 group-hover:scale-105"/>}</span>)}</div>
@@ -105,7 +106,7 @@ function ShopsToKnow({ shops }: { shops?: Shop[] }) {
           {shop.bio && <p className="mt-2 line-clamp-2 text-sm leading-5 text-ink/65">{shop.bio}</p>}
         </div>
       </Link>)}
-    </div>
+    </ScrollRow>
   </section>;
 }
 
