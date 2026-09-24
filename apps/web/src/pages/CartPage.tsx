@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, LockKeyhole, Minus, Plus, ShoppingBag, Sparkles, Trash2, Truck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AuthRequired } from '../components/AuthRequired';
@@ -6,6 +6,8 @@ import { EmptyState, PageIntro, PageLoader } from '../components/PageState';
 import { toast, toastError } from '../lib/toast';
 import { Button } from '../components/ui/Button';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
+import { useMe } from '../hooks/useSession';
+import { remember, useRemembered } from '../lib/aiMemory';
 import { api, ApiError, type AiSummary, type Cart, type CartItem } from '../lib/api';
 import { FREE_SHIPPING_THRESHOLD, money, shippingFor, stockLevel } from '../lib/utils';
 import { t, tx, getLanguage } from '../lib/i18n';
@@ -40,7 +42,21 @@ export function CartPage() {
     onError: (cause, _, context) => { if (context?.previous) queryClient.setQueryData(['cart'], context.previous); toastError(cause, t('Could not remove this item')); },
     onSettled: () => queryClient.invalidateQueries({ queryKey: ['cart'] }),
   });
-  const summarize = useMutation({ mutationFn: () => api<AiSummary>('/ai/cart/summary', { method: 'POST', body: JSON.stringify({ language: getLanguage() }) }) });
+  // The cart summary is kept until the cart changes: it is stored with a fingerprint of the lines it described.
+  const { user } = useMe();
+  const summaryKey = user?.id ? `summary:${user.id}:cart:${getLanguage()}` : null;
+  const fingerprint = (data?.cart.items ?? []).map((item) => `${item.product.id}:${item.variant?.id ?? ''}:${item.quantity}:${item.product.price}:${item.product.status}`).sort().join('|');
+  const saved = useRemembered<{ summary: string; fingerprint: string }>(summaryKey);
+  const savedSummary = saved && saved.fingerprint === fingerprint ? saved.summary : null;
+  const summarize = useMutation({
+    mutationKey: ['summary', summaryKey],
+    mutationFn: async ({ storeKey, cart }: { storeKey: string; cart: string }) => {
+      const result = await api<AiSummary>('/ai/cart/summary', { method: 'POST', body: JSON.stringify({ language: getLanguage() }) });
+      remember(storeKey, { summary: result.summary, fingerprint: cart });
+      return result;
+    },
+  });
+  const summarizing = useIsMutating({ mutationKey: ['summary', summaryKey] }) > 0;
   if (error instanceof ApiError && error.status === 401) return <AuthRequired title={t('Your cart is waiting')}/>;
   if (isLoading) return <PageLoader label={t('Loading your cart…')}/>;
   const items = data?.cart.items ?? [];
@@ -93,7 +109,7 @@ export function CartPage() {
         <p className="mt-1 text-xs text-ink/50">{t('Coupons can be applied at checkout.')}</p>
         {unavailable.length ? <p className="mt-5 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700" role="alert">{t('Remove unavailable items or lower their quantity before checkout.')}</p> : <Button className="mt-5 w-full" size="lg" asChild><Link to="/checkout">{t('Checkout')} <ArrowRight size={18}/></Link></Button>}
         <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-ink/50"><LockKeyhole size={13}/>{t('Secure checkout · Cash on delivery')}</p>
-        <div className="mt-5 border-t border-ink/10 pt-5"><Button variant="ghost" className="w-full" disabled={summarize.isPending} onClick={() => summarize.mutate()}><Sparkles size={16}/>{summarize.isPending ? t('Summarizing…') : summarize.data ? t('Summarize again') : t('Summarize my cart with AI')}</Button>{summarize.data && <p className="mt-3 text-sm leading-6 text-ink/70" aria-live="polite">{summarize.data.summary}</p>}{summarize.error && <p className="mt-3 text-xs text-red-700" role="alert">{summarize.error instanceof Error ? summarize.error.message : t('Could not create the summary')}</p>}</div>
+        <div className="mt-5 border-t border-ink/10 pt-5"><Button variant="ghost" className="w-full" disabled={summarizing} onClick={() => { if (summaryKey) summarize.mutate({ storeKey: summaryKey, cart: fingerprint }); }}><Sparkles size={16}/>{summarizing ? t('Summarizing…') : savedSummary ? t('Summarize again') : t('Summarize my cart with AI')}</Button>{savedSummary && <p className="mt-3 text-sm leading-6 text-ink/70" aria-live="polite">{savedSummary}</p>}{summarize.error && <p className="mt-3 text-xs text-red-700" role="alert">{summarize.error instanceof Error ? summarize.error.message : t('Could not create the summary')}</p>}</div>
       </aside>
     </div>}
   </main>;

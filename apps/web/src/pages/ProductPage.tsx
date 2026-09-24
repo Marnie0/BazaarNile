@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useIsMutating, useMutation, useQuery } from '@tanstack/react-query';
 import { Banknote, ChevronRight, Heart, Minus, PackageX, Plus, ShieldCheck, Sparkles, Truck } from 'lucide-react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
@@ -12,6 +12,8 @@ import { Button } from '../components/ui/Button';
 import { useAddToCart } from '../hooks/useAddToCart';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useWishlist } from '../hooks/useWishlist';
+import { useMe } from '../hooks/useSession';
+import { remember, useRemembered } from '../lib/aiMemory';
 import { api, hasAccessToken, type AiSummary, type Product } from '../lib/api';
 import { discountPercent, FREE_SHIPPING_THRESHOLD, money, stockLevel } from '../lib/utils';
 import { t, getLanguage } from '../lib/i18n';
@@ -47,7 +49,19 @@ function ProductDetails({ slug }: { slug: string }) {
     if (!productId || !hasAccessToken()) return;
     api<void>(`/products/${productId}/views`, { method: 'POST' }).catch(() => undefined);
   }, [productId]);
-  const summarize = useMutation({ mutationFn: () => api<AiSummary>(`/ai/products/${productId}/summary`, { method: 'POST', body: JSON.stringify({ language: getLanguage() }) }) });
+  // The summary is remembered per account, product, and language until the shopper asks for a new one.
+  const { user } = useMe();
+  const summaryKey = user?.id && productId ? `summary:${user.id}:product:${productId}:${getLanguage()}` : null;
+  const savedSummary = useRemembered<string>(summaryKey);
+  const summarize = useMutation({
+    mutationKey: ['summary', summaryKey],
+    mutationFn: async (storeKey: string) => {
+      const result = await api<AiSummary>(`/ai/products/${productId}/summary`, { method: 'POST', body: JSON.stringify({ language: getLanguage() }) });
+      remember(storeKey, result.summary);
+      return result;
+    },
+  });
+  const summarizing = useIsMutating({ mutationKey: ['summary', summaryKey] }) > 0;
 
   if (isLoading) return <ProductSkeleton/>;
   if (isError || !p) return <main className="container-shell"><EmptyState icon={PackageX} title={t('Product not found')} action={<Button asChild><Link to="/shop">{t('Return to the bazaar')}</Link></Button>}>{t('This listing may have been removed or is no longer available.')}</EmptyState></main>;
@@ -116,7 +130,7 @@ function ProductDetails({ slug }: { slug: string }) {
           <li className="flex items-start gap-2.5"><ShieldCheck size={18} className="mt-0.5 shrink-0 text-nile"/><span><strong className="block font-semibold">{t('Reviewed listing')}</strong><span className="text-ink/55">{t('Approved by our team')}</span></span></li>
         </ul>
 
-        <div className="mt-5 rounded-2xl border border-nile/15 bg-nile-light/35 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="flex items-center gap-2 font-semibold"><Sparkles size={17} className="text-nile"/>{t('Quick AI summary')}</p><p className="mt-1 text-xs text-ink/55">{t('A short, plain-language take on this product.')}</p></div><Button variant="outline" className="px-4 py-2" disabled={summarize.isPending} onClick={() => requireAccount(() => summarize.mutate())}>{summarize.isPending ? t('Summarizing…') : summarize.data ? t('Summarize again') : t('Summarize')}</Button></div>{summarize.data && <p className="mt-4 text-sm leading-6 text-ink/75" aria-live="polite">{summarize.data.summary}</p>}{summarize.error && <p className="mt-3 text-sm text-red-700" role="alert">{summarize.error instanceof Error ? summarize.error.message : t('Could not create the summary')}</p>}</div>
+        <div className="mt-5 rounded-2xl border border-nile/15 bg-nile-light/35 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="flex items-center gap-2 font-semibold"><Sparkles size={17} className="text-nile"/>{t('Quick AI summary')}</p><p className="mt-1 text-xs text-ink/55">{t('A short, plain-language take on this product.')}</p></div><Button variant="outline" className="px-4 py-2" disabled={summarizing} onClick={() => requireAccount(() => { if (summaryKey) summarize.mutate(summaryKey); })}>{summarizing ? t('Summarizing…') : savedSummary ? t('Summarize again') : t('Summarize')}</Button></div>{savedSummary && <p className="mt-4 text-sm leading-6 text-ink/75" aria-live="polite">{savedSummary}</p>}{summarize.error && <p className="mt-3 text-sm text-red-700" role="alert">{summarize.error instanceof Error ? summarize.error.message : t('Could not create the summary')}</p>}</div>
 
         <Link to={`/profiles/${p.seller.username}`} className="group mt-5 flex items-center gap-3 rounded-2xl bg-sand p-4 transition hover:bg-[#eee2cf]">{p.seller.avatarUrl ? <img src={p.seller.avatarUrl} alt="" className="size-11 rounded-full object-cover"/> : <span className="grid size-11 place-items-center rounded-full bg-nile text-lg font-bold text-white">{p.seller.displayName[0]}</span>}<div className="min-w-0 flex-1"><p className="text-xs text-ink/50">{t('Sold by')}</p><p className="truncate font-semibold">{p.seller.displayName}</p></div><span className="text-sm font-semibold text-nile group-hover:underline">{t('Visit shop')}</span></Link>
       </div>

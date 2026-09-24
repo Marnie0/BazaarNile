@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Button } from '../ui/Button';
 import { api, setAccessToken, type Cart, type Notification } from '../../lib/api';
 import { useMe } from '../../hooks/useSession';
+import { forgetAll } from '../../lib/aiMemory';
 import { t } from '../../lib/i18n';
 import { LanguageSwitch } from '../LanguageSwitch';
 
@@ -76,6 +77,7 @@ export function Header() {
     try { await api<void>('/auth/logout', { method: 'POST' }); } catch { /* sign out locally regardless */ } finally {
       setAccessToken(null);
       queryClient.clear();
+      forgetAll();
       navigate('/');
     }
   };

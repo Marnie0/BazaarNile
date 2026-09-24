@@ -862,6 +862,8 @@ const ar: Dictionary = {
   '{stars} star reviews: {count}, filtering': 'تقييمات بـ{stars} من 5 نجوم: {count}، مع التصفية',
   '© {year} BazaarNile. Built to help you shop smarter.': '© {year} BazaarNile. صُمّم لمساعدتك على التسوق بذكاء.',
   'Optional': 'اختياري',
+  'Your last message didn’t get a reply.': 'لم تتلقَّ رسالتك الأخيرة ردًا.',
+  'Send again': 'أرسل مرة أخرى',
   'BazaarNile — Shop smarter': 'BazaarNile — تسوّق بذكاء',
   // Stored notification titles and recommendation reasons
   'Order placed': 'تم تقديم الطلب',
