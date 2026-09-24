@@ -33,28 +33,43 @@ async function generateContent(prompt: string, options: GenerationOptions, image
       },
     }),
   } satisfies RequestInit;
+  // Gemini returns 503 when a model is overloaded, often for minutes at a time. Retry briefly, then fall
+  // back to the next model so shoppers still get an answer. The deadline keeps us inside the function limit.
+  const models = [...new Set([model, ...env.GEMINI_FALLBACK_MODELS.split(',').map((name) => name.trim()).filter(Boolean)])];
+  const deadline = Date.now() + 45_000;
   let response: Response | undefined;
   let timedOut = false;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-        ...request, signal: AbortSignal.timeout(18_000),
-      });
-      if (response.status < 500 || response.status > 599 || attempt === 1) break;
-      console.warn('Gemini transient upstream response', { status: response.status, model, retrying: true });
-    } catch (error) {
-      timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
-      if (attempt === 1) break;
-      console.warn('Gemini transient network failure', { timedOut, model, retrying: true });
+  let rateLimited = false;
+  attempts: for (const candidate of models) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const remaining = deadline - Date.now();
+      if (remaining < 3_000) break attempts;
+      try {
+        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(candidate)}:generateContent`, {
+          ...request, signal: AbortSignal.timeout(Math.min(18_000, remaining)),
+        });
+        timedOut = false;
+        if (response.ok) break attempts;
+        if (response.status === 429) { rateLimited = true; console.warn('Gemini rate limited', { model: candidate }); continue attempts; }
+        // 404 means this model name is unavailable to the key; other 4xx errors would fail on every model.
+        if (response.status === 404) { console.warn('Gemini model unavailable', { model: candidate }); continue attempts; }
+        if (response.status < 500) break attempts;
+        console.warn('Gemini transient upstream response', { status: response.status, model: candidate, attempt });
+      } catch (error) {
+        timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+        response = undefined;
+        console.warn('Gemini transient network failure', { timedOut, model: candidate, attempt });
+      }
+      if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 700));
     }
   }
+  if (!response?.ok && rateLimited) throw new AppError(429, 'The AI request limit was reached. Please try again shortly');
   if (!response) {
     if (timedOut) throw new AppError(504, 'Gemini took too long to respond. Please try again');
     throw new AppError(502, 'The AI service is unavailable. Please try again');
   }
-  if (response.status === 429) throw new AppError(429, 'The AI request limit was reached. Please try again shortly');
   if (!response.ok) {
-    console.warn('Gemini request rejected', { status: response.status, model });
+    console.warn('Gemini request rejected', { status: response.status, models });
     throw new AppError(502, 'Gemini could not respond right now. Please try again');
   }
   const result = await response.json() as GeminiResponse;
