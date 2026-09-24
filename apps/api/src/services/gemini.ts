@@ -2,7 +2,7 @@ import { env } from '../config/env.js';
 import { AppError } from '../utils/errors.js';
 
 type GeminiResponse = {
-  candidates?: { content?: { parts?: { text?: string }[] } }[];
+  candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
 };
 
 type GenerationOptions = {
@@ -26,7 +26,7 @@ async function generateContent(prompt: string, options: GenerationOptions, image
       systemInstruction: { parts: [{ text: options.systemInstruction }] },
       contents: [{ role: 'user', parts: [...(image ? [{ inlineData: image }] : []), { text: prompt }] }],
       generationConfig: {
-        maxOutputTokens: options.maxOutputTokens ?? 512,
+        maxOutputTokens: options.maxOutputTokens ?? 2_048,
         thinkingConfig: { thinkingLevel: options.thinkingLevel ?? 'minimal' },
         ...(options.responseMimeType && { responseMimeType: options.responseMimeType }),
         ...(options.responseSchema && { responseSchema: options.responseSchema }),
@@ -74,6 +74,8 @@ async function generateContent(prompt: string, options: GenerationOptions, image
   }
   const result = await response.json() as GeminiResponse;
   const text = result.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('').trim();
+  // Thinking tokens count toward maxOutputTokens, so a budget that is too small cuts the answer off mid-way.
+  if (result.candidates?.[0]?.finishReason === 'MAX_TOKENS') console.warn('Gemini answer truncated', { length: text?.length ?? 0 });
   if (!text) throw new AppError(502, 'Gemini returned an empty response. Please try again');
   return text;
 }
