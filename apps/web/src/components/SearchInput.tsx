@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
 import { api, type SearchSuggestions } from '../lib/api';
 import { cn, money } from '../lib/utils';
+import { t, tx } from '../lib/i18n';
 
 type Option = { key: string; to: string; label: ReactNode; detail?: ReactNode; image?: string; icon?: typeof Search };
 
@@ -33,9 +34,9 @@ export function SearchInput({ value, onValueChange, className, ...props }: Omit<
   useEffect(() => { setActive(-1); }, [term]);
 
   const options: Option[] = trimmed.length >= 2 && data ? [
-    { key: 'search', to: `/shop?search=${encodeURIComponent(trimmed)}`, label: <>Search for “<strong>{trimmed}</strong>”</>, icon: Search },
-    ...data.categories.map((category) => ({ key: `c-${category.slug}`, to: `/shop?category=${category.slug}`, label: highlight(category.name, term), detail: 'Category', icon: LayoutGrid })),
-    ...data.products.map((product) => ({ key: product.id, to: `/products/${product.slug}`, label: highlight(product.name, term), detail: <>{product.category.name} · {money(product.price)}</>, image: product.imageUrl })),
+    { key: 'search', to: `/shop?search=${encodeURIComponent(trimmed)}`, label: tx('Search for “{term}”', { term: <strong>{trimmed}</strong> }), icon: Search },
+    ...data.categories.map((category) => ({ key: `c-${category.slug}`, to: `/shop?category=${category.slug}`, label: highlight(t(category.name), term), detail: t('Category'), icon: LayoutGrid })),
+    ...data.products.map((product) => ({ key: product.id, to: `/products/${product.slug}`, label: highlight(product.name, term), detail: <>{t(product.category.name)} · {money(product.price)}</>, image: product.imageUrl })),
   ] : [];
   const show = open && options.length > 1;
   const go = (option: Option) => { setOpen(false); navigate(option.to); };
@@ -52,7 +53,7 @@ export function SearchInput({ value, onValueChange, className, ...props }: Omit<
         else if (event.key === 'ArrowUp') { event.preventDefault(); setActive((index) => (index <= 0 ? options.length : index) - 1); }
         else if (event.key === 'Enter' && active >= 0) { event.preventDefault(); go(options[active]!); }
       }}/>
-    {show && <ul id={listId} role="listbox" aria-label="Search suggestions" className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-50 max-h-[min(26rem,70svh)] overflow-y-auto rounded-2xl border border-ink/10 bg-white p-1.5 text-left shadow-[0_18px_50px_rgba(19,33,27,.16)]">
+    {show && <ul id={listId} role="listbox" aria-label={t('Search suggestions')} className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-50 max-h-[min(26rem,70svh)] overflow-y-auto rounded-2xl border border-ink/10 bg-white p-1.5 text-start shadow-[0_18px_50px_rgba(19,33,27,.16)]">
       {options.map((option, index) => {
         const Icon = option.icon;
         return <li key={option.key} id={`${listId}-${index}`} role="option" aria-selected={index === active}

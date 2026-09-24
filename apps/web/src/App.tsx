@@ -9,6 +9,7 @@ import { Toaster } from './components/Toaster';
 import { Button } from './components/ui/Button';
 import { ConfirmDialogHost } from './components/ui/ConfirmDialog';
 import { HomePage } from './pages/HomePage';
+import { t } from './lib/i18n';
 
 // The storefront landing page ships in the main bundle; everything else loads on demand so
 // shoppers never download the Seller Center or Admin Panel code.
@@ -33,16 +34,16 @@ const LoginPage = lazy(() => import('./pages/AuthPage').then((module) => ({ defa
 const RegisterPage = lazy(() => import('./pages/AuthPage').then((module) => ({ default: () => <module.AuthPage mode="register"/> })));
 
 function NotFoundPage() {
-  return <main className="container-shell"><EmptyState icon={Compass} title="This aisle doesn’t exist" action={<><Button asChild><Link to="/shop">Browse the bazaar</Link></Button><Button variant="outline" asChild><Link to="/">Go home</Link></Button></>}>The page you’re looking for may have moved, or the link might be mistyped.</EmptyState></main>;
+  return <main className="container-shell"><EmptyState icon={Compass} title={t('This aisle doesn’t exist')} action={<><Button asChild><Link to="/shop">{t('Browse the bazaar')}</Link></Button><Button variant="outline" asChild><Link to="/">{t('Go home')}</Link></Button></>}>{t('The page you’re looking for may have moved, or the link might be mistyped.')}</EmptyState></main>;
 }
 
 export default function App() {
   return <div className="flex min-h-screen flex-col">
-    <a href="#main-content" className="skip-link">Skip to content</a>
+    <a href="#main-content" className="skip-link">{t('Skip to content')}</a>
     <ScrollToTop/>
     <Header/>
     <div id="main-content" className="flex-1" tabIndex={-1}>
-      <Suspense fallback={<PageLoader label="Loading…"/>}>
+      <Suspense fallback={<PageLoader label={t('Loading…')}/>}>
         <Routes>
           <Route path="/" element={<HomePage/>}/>
           <Route path="/shop" element={<ShopPage/>}/>

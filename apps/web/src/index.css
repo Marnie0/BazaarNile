@@ -8,8 +8,8 @@
   --color-sand: #f4ecdd;
   --color-gold: #d5a62e;
   --color-gold-deep: #c4900f;
-  --font-sans: "IBM Plex Sans", sans-serif;
-  --font-display: "Newsreader", serif;
+  --font-sans: "IBM Plex Sans", "IBM Plex Sans Arabic", sans-serif;
+  --font-display: "Newsreader", "Noto Naskh Arabic", serif;
 }
 
 * { box-sizing: border-box; }
@@ -26,7 +26,7 @@ img { display: block; max-width: 100%; }
 /* Component classes live in a layer so Tailwind utilities (w-auto, rounded-full, py-2…) can override them. */
 @layer components {
 .eyebrow { margin: 0; color: #244e5a; font-size: .78rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
-.skip-link { position: fixed; top: .75rem; left: .75rem; z-index: 100; padding: .7rem 1rem; border-radius: 999px; background: #342b25; color: #fff; font-size: .875rem; font-weight: 600; transform: translateY(-200%); transition: transform .15s ease; }
+.skip-link { position: fixed; top: .75rem; inset-inline-start: .75rem; z-index: 100; padding: .7rem 1rem; border-radius: 999px; background: #342b25; color: #fff; font-size: .875rem; font-weight: 600; transform: translateY(-200%); transition: transform .15s ease; }
 .skip-link:focus { transform: translateY(0); }
 #main-content:focus { outline: none; }
 .spinner { width: 2rem; height: 2rem; border: 3px solid rgba(36,78,90,.15); border-top-color: #244e5a; border-radius: 50%; animation: spin .8s linear infinite; }
@@ -34,7 +34,7 @@ img { display: block; max-width: 100%; }
 .field { width: 100%; min-width: 0; border: 1px solid rgba(52,43,37,.14); border-radius: .85rem; background: #fff; padding: .75rem 1rem; outline: none; transition: border-color .15s ease, box-shadow .15s ease; }
 .field:focus { border-color: #244e5a; box-shadow: 0 0 0 4px rgba(36,78,90,.1); }
 .field:user-invalid { border-color: #b4412c; }
-.select-field { appearance: none; padding-right: 2.5rem; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23342b25' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-position: right .9rem center; background-repeat: no-repeat; }
+.select-field { appearance: none; padding-inline-end: 2.5rem; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23342b25' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-position: right .9rem center; background-repeat: no-repeat; }
 .field-label { display: grid; align-content: start; gap: .4rem; font-size: .875rem; font-weight: 600; }
 .field-hint { font-size: .75rem; font-weight: 400; color: rgba(52,43,37,.5); }
 .surface { border: 1px solid rgba(52,43,37,.08); border-radius: 1.25rem; background: #fff; }
@@ -60,19 +60,19 @@ img { display: block; max-width: 100%; }
 .product-card__image-link { display: block; aspect-ratio: 4 / 5; }
 .product-card__image-link img { width: 100%; height: 100%; object-fit: cover; transition: transform .45s cubic-bezier(.2,.7,.2,1); }
 .product-card:hover .product-card__image-link img { transform: scale(1.035); }
-.product-card__badges { position: absolute; top: .7rem; left: .7rem; display: flex; gap: .35rem; pointer-events: none; }
+.product-card__badges { position: absolute; top: .7rem; inset-inline-start: .7rem; display: flex; gap: .35rem; pointer-events: none; }
 .product-card__badge { padding: .3rem .55rem; border-radius: 999px; background: #244e5a; color: #fff; font-size: .68rem; font-weight: 700; letter-spacing: .03em; }
 .product-card__badge--sale { background: #a44732; }
 .product-card__badge--muted { background: rgba(52,43,37,.78); }
-.product-card__wish { position: absolute; top: .6rem; right: .6rem; display: grid; width: 2.5rem; height: 2.5rem; place-items: center; border: 1px solid rgba(52,43,37,.1); border-radius: 50%; background: rgba(255,250,241,.94); color: #342b25; cursor: pointer; box-shadow: 0 4px 14px rgba(52,43,37,.1); transition: color .15s ease, background .15s ease; }
+.product-card__wish { position: absolute; top: .6rem; inset-inline-end: .6rem; display: grid; width: 2.5rem; height: 2.5rem; place-items: center; border: 1px solid rgba(52,43,37,.1); border-radius: 50%; background: rgba(255,250,241,.94); color: #342b25; cursor: pointer; box-shadow: 0 4px 14px rgba(52,43,37,.1); transition: color .15s ease, background .15s ease; }
 .product-card__wish:hover, .product-card__wish.is-saved { color: #a44732; }
 .product-card__wish.is-saved { background: #fff1ec; border-color: rgba(164,71,50,.3); }
-.product-card__quick-add { position: absolute; right: .6rem; bottom: .6rem; left: .6rem; display: flex; align-items: center; justify-content: center; gap: .4rem; min-height: 2.6rem; border: 0; border-radius: 999px; background: rgba(52,43,37,.92); color: #fff; font-size: .82rem; font-weight: 600; cursor: pointer; opacity: 0; transform: translateY(.5rem); transition: opacity .2s ease, transform .2s ease, background .15s ease; backdrop-filter: blur(6px); }
+.product-card__quick-add { position: absolute; inset-inline: .6rem; bottom: .6rem; display: flex; align-items: center; justify-content: center; gap: .4rem; min-height: 2.6rem; border: 0; border-radius: 999px; background: rgba(52,43,37,.92); color: #fff; font-size: .82rem; font-weight: 600; cursor: pointer; opacity: 0; transform: translateY(.5rem); transition: opacity .2s ease, transform .2s ease, background .15s ease; backdrop-filter: blur(6px); }
 .product-card__quick-add:hover { background: #a44732; }
 .product-card:hover .product-card__quick-add, .product-card__quick-add:focus-visible { opacity: 1; transform: translateY(0); }
 .product-card__quick-add:disabled { opacity: .7; cursor: progress; }
 @media (hover: none) {
-  .product-card__quick-add { right: .6rem; left: auto; width: 2.5rem; height: 2.5rem; min-height: 0; padding: 0; opacity: 1; transform: none; }
+  .product-card__quick-add { inset-inline-end: .6rem; inset-inline-start: auto; width: 2.5rem; height: 2.5rem; min-height: 0; padding: 0; opacity: 1; transform: none; }
   .product-card__quick-add span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 .product-card__body { padding-top: .9rem; }
@@ -92,7 +92,7 @@ img { display: block; max-width: 100%; }
 
 .market-promises { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: 2rem; margin-bottom: 6rem; border-block: 1px solid rgba(52,43,37,.16); }
 .market-promises > div { display: grid; grid-template-columns: auto 1fr; column-gap: 1rem; padding: 2rem; }
-.market-promises > div + div { border-left: 1px solid rgba(52,43,37,.16); }
+.market-promises > div + div { border-inline-start: 1px solid rgba(52,43,37,.16); }
 .market-promises svg { grid-row: span 2; color: #a44732; }
 .market-promises h3 { margin: 0; font-size: 1rem; }
 .market-promises p { margin: .35rem 0 0; color: rgba(52,43,37,.63); font-size: .9rem; line-height: 1.5; }
@@ -100,7 +100,7 @@ img { display: block; max-width: 100%; }
 @media (max-width: 960px) {
   .product-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .market-promises { grid-template-columns: 1fr; }
-  .market-promises > div + div { border-left: 0; border-top: 1px solid rgba(52,43,37,.16); }
+  .market-promises > div + div { border-inline-start: 0; border-top: 1px solid rgba(52,43,37,.16); }
 }
 
 @media (max-width: 640px) {
@@ -120,3 +120,13 @@ img { display: block; max-width: 100%; }
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* Right-to-left (Arabic) */
+[dir="rtl"] .select-field { background-position: left .9rem center; }
+/* Letter-spacing breaks the joins between Arabic letters, and Arabic has no capitals to space out. */
+:lang(ar) *, :lang(ar) *::before, :lang(ar) *::after { letter-spacing: normal !important; }
+:lang(ar) body { line-height: 1.7; }
+/* Product names, descriptions, and reviews are usually English; keep their punctuation on the right side. */
+:lang(ar) :is(.product-card h3, .user-text) { unicode-bidi: plaintext; }
+/* Arrows and chevrons point the way the page reads. */
+[dir="rtl"] :is(.lucide-arrow-right, .lucide-arrow-left, .lucide-chevron-right, .lucide-chevron-left, .lucide-log-out, .lucide-log-in, .lucide-send) { transform: scaleX(-1); }

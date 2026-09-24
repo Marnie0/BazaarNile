@@ -1,9 +1,10 @@
 import { Star } from 'lucide-react';
 import { useState } from 'react';
+import { t } from '../../lib/i18n';
 
 /** Read-only stars with partial fill, e.g. 4.3 shows four full stars and a third of the fifth. */
 export function Stars({ value, size = 14, className = '' }: { value: number; size?: number; className?: string }) {
-  return <span className={`inline-flex items-center gap-0.5 ${className}`} role="img" aria-label={`Rated ${value.toFixed(1)} out of 5`}>
+  return <span className={`inline-flex items-center gap-0.5 ${className}`} role="img" aria-label={t('Rated {value} out of 5', { value: value.toFixed(1) })}>
     {[0, 1, 2, 3, 4].map((index) => {
       const fill = Math.max(0, Math.min(1, value - index));
       return <span key={index} className="relative inline-block" style={{ width: size, height: size }}>
@@ -21,15 +22,15 @@ export function StarInput({ value, onChange, name = 'rating' }: { value: number;
   const [hover, setHover] = useState(0);
   const shown = hover || value;
   return <div className="flex flex-wrap items-center gap-3">
-    <div role="radiogroup" aria-label="Your rating" className="flex" onMouseLeave={() => setHover(0)}>
+    <div role="radiogroup" aria-label={t('Your rating')} className="flex" onMouseLeave={() => setHover(0)}>
       {labels.map((label, index) => {
         const rating = index + 1;
         return <label key={rating} className="cursor-pointer p-0.5" onMouseEnter={() => setHover(rating)}>
-          <input type="radio" name={name} value={rating} checked={value === rating} onChange={() => onChange(rating)} className="peer sr-only" aria-label={`${rating} star${rating === 1 ? '' : 's'}: ${label}`}/>
+          <input type="radio" name={name} value={rating} checked={value === rating} onChange={() => onChange(rating)} className="peer sr-only" aria-label={t('{count} stars: {label}', { count: rating, label: t(label) })}/>
           <Star size={30} strokeWidth={1.5} className={`rounded transition peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-nile ${rating <= shown ? 'fill-gold text-gold-deep' : 'fill-transparent text-ink/25'}`}/>
         </label>;
       })}
     </div>
-    <span className="min-w-20 text-sm font-semibold text-ink/65" aria-hidden="true">{shown ? labels[shown - 1] : 'Tap to rate'}</span>
+    <span className="min-w-20 text-sm font-semibold text-ink/65" aria-hidden="true">{shown ? t(labels[shown - 1]!) : t('Tap to rate')}</span>
   </div>;
 }

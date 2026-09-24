@@ -3,6 +3,7 @@ import { AlertCircle, CheckCircle2, X } from 'lucide-react';
 import { useSyncExternalStore } from 'react';
 import { Link } from 'react-router-dom';
 import { dismiss, getToasts, subscribeToToasts } from '../lib/toast';
+import { t } from '../lib/i18n';
 
 export function Toaster() {
   const items = useSyncExternalStore(subscribeToToasts, getToasts, getToasts);
@@ -14,7 +15,7 @@ export function Toaster() {
         {item.tone === 'error' ? <AlertCircle size={18} className="shrink-0 text-[#ffb4a3]"/> : <CheckCircle2 size={18} className="shrink-0 text-[#7bc3aa]"/>}
         <p className="min-w-0 flex-1 font-medium">{item.message}</p>
         {item.action && <Link to={item.action.to} onClick={() => dismiss(item.id)} className="shrink-0 rounded-full bg-white/12 px-3 py-1.5 text-xs font-bold hover:bg-white/20">{item.action.label}</Link>}
-        <button type="button" onClick={() => dismiss(item.id)} aria-label="Dismiss" className="grid size-7 shrink-0 place-items-center rounded-full text-white/60 hover:bg-white/10 hover:text-white"><X size={15}/></button>
+        <button type="button" onClick={() => dismiss(item.id)} aria-label={t('Dismiss')} className="grid size-7 shrink-0 place-items-center rounded-full text-white/60 hover:bg-white/10 hover:text-white"><X size={15}/></button>
       </motion.div>)}
     </AnimatePresence>
   </div>;

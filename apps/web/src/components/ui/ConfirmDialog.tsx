@@ -3,6 +3,7 @@ import { AlertTriangle, HelpCircle } from 'lucide-react';
 import { useEffect, useId, useRef, useSyncExternalStore, type KeyboardEvent } from 'react';
 import { getConfirm, settleConfirm, subscribeToConfirm } from '../../lib/confirm';
 import { Button } from './Button';
+import { t } from '../../lib/i18n';
 
 export function ConfirmDialogHost() {
   const request = useSyncExternalStore(subscribeToConfirm, getConfirm, getConfirm);
@@ -41,8 +42,8 @@ export function ConfirmDialogHost() {
       <h2 id={titleId} className="mt-4 font-display text-2xl font-semibold leading-tight">{request.title}</h2>
       {request.message && <p id={messageId} className="mt-2 text-sm leading-6 text-ink/65">{request.message}</p>}
       <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button ref={cancelRef} variant="outline" onClick={() => settleConfirm(false)}>{request.cancelLabel ?? 'Cancel'}</Button>
-        <Button data-confirm="" variant={request.tone === 'danger' ? 'destructive' : 'primary'} onClick={() => settleConfirm(true)}>{request.confirmLabel ?? 'Confirm'}</Button>
+        <Button ref={cancelRef} variant="outline" onClick={() => settleConfirm(false)}>{request.cancelLabel ?? t('Cancel')}</Button>
+        <Button data-confirm="" variant={request.tone === 'danger' ? 'destructive' : 'primary'} onClick={() => settleConfirm(true)}>{request.confirmLabel ?? t('Confirm')}</Button>
       </div>
     </motion.div>
   </motion.div>}</AnimatePresence>;

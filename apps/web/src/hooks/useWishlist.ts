@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast, toastError } from '../lib/toast';
 import { api, type Product, type WishlistItem } from '../lib/api';
 import { useIsAuthenticated } from './useSession';
+import { t } from '../lib/i18n';
 
 type WishlistData = { items: WishlistItem[] };
 
@@ -17,7 +18,7 @@ export function useWishlist(product: Product | undefined) {
   const saved = Boolean(product && wishlist.data?.items.some((item) => item.product.id === product.id));
   const toggle = useMutation({
     mutationFn: async () => {
-      if (!product) throw new Error('Product not found');
+      if (!product) throw new Error(t('Product not found'));
       if (saved) {
         await api<void>(`/wishlist/${product.id}`, { method: 'DELETE' });
         return { saved: false as const };
@@ -32,9 +33,9 @@ export function useWishlist(product: Product | undefined) {
         if (current.items.some((item) => item.product.id === product?.id)) return current;
         return { items: [result.item, ...current.items] };
       });
-      toast(result.saved ? 'Saved to your wishlist' : 'Removed from your wishlist', result.saved ? { action: { label: 'View', to: '/wishlist' } } : {});
+      toast(result.saved ? t('Saved to your wishlist') : t('Removed from your wishlist'), result.saved ? { action: { label: t('View'), to: '/wishlist' } } : {});
     },
-    onError: (error) => toastError(error, 'Could not update your wishlist'),
+    onError: (error) => toastError(error, t('Could not update your wishlist')),
   });
   return { saved: toggle.isPending ? !saved : saved, toggle: toggle.mutate, isPending: toggle.isPending, error: toggle.error };
 }

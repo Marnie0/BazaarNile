@@ -10,6 +10,13 @@ import { asyncHandler } from '../utils/async-handler.js';
 import { AppError } from '../utils/errors.js';
 
 export const aiRouter = Router();
+
+// Shoppers browsing in Arabic get AI answers in Arabic; product names stay as listed so they match the catalog.
+const languageField = z.enum(['en', 'ar']).default('en');
+const replyLanguage = (language: 'en' | 'ar') => language === 'ar'
+  ? '\n\nWrite every sentence of your answer in clear Modern Standard Arabic suited to shoppers in Egypt. Keep product names, brand names, and numbers exactly as written in the data.'
+  : '';
+const languageOf = (body: unknown) => z.object({ language: languageField }).catch({ language: 'en' }).parse(body ?? {}).language;
 aiRouter.use('/ai', requireAuth, rateLimit({
   windowMs: 10 * 60_000, limit: 20, standardHeaders: true, legacyHeaders: false,
   // Budget AI spend per account rather than per IP; requireAuth has already run.
@@ -24,7 +31,7 @@ aiRouter.post('/ai/products/:productId/summary', asyncHandler(async (req, res) =
     include: { category: { select: { name: true } }, seller: { select: { displayName: true } } },
   });
   if (!product) throw new AppError(404, 'Product not found');
-  const summary = await generateSummary(`Summarize this product for a shopper in 2 or 3 useful sentences. Explain what it is, its main benefits, price, and availability. Avoid hype.\n\nPRODUCT DATA:\n${JSON.stringify({
+  const summary = await generateSummary(`Summarize this product for a shopper in 2 or 3 useful sentences. Explain what it is, its main benefits, price, and availability. Avoid hype.${replyLanguage(languageOf(req.body))}\n\nPRODUCT DATA:\n${JSON.stringify({
     name: product.name, category: product.category.name, description: product.description,
     priceEGP: product.price.toString(), compareAtEGP: product.compareAt?.toString() ?? null,
     inventory: product.inventory, seller: product.seller.displayName,
@@ -40,7 +47,7 @@ aiRouter.post('/ai/cart/summary', asyncHandler(async (req, res) => {
   if (!cart?.items.length) throw new AppError(400, 'Your cart is empty');
   const subtotal = cart.items.reduce((sum, item) => sum + Number(item.product.price) * item.quantity, 0);
   const shipping = subtotal >= 1_500 ? 0 : 75;
-  const summary = await generateSummary(`Summarize this shopping cart in 3 or 4 concise sentences. Describe the selection, quantities, total cost in Egyptian pounds, shipping cost, and flag any unavailable or insufficient-stock item. Give one practical observation without inventing product compatibility or benefits.\n\nCART DATA:\n${JSON.stringify({
+  const summary = await generateSummary(`Summarize this shopping cart in 3 or 4 concise sentences. Describe the selection, quantities, total cost in Egyptian pounds, shipping cost, and flag any unavailable or insufficient-stock item. Give one practical observation without inventing product compatibility or benefits.${replyLanguage(languageOf(req.body))}\n\nCART DATA:\n${JSON.stringify({
     items: cart.items.map((item) => ({ name: item.product.name, category: item.product.category.name,
       quantity: item.quantity, unitPriceEGP: item.product.price.toString(), inventory: item.product.inventory,
       available: item.product.status === ProductStatus.ACTIVE })),
@@ -51,6 +58,7 @@ aiRouter.post('/ai/cart/summary', asyncHandler(async (req, res) => {
 
 const assistantMessagesSchema = z.object({
   messages: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().trim().min(1).max(800) })).min(1).max(12),
+  language: languageField,
 }).refine((value) => value.messages[value.messages.length - 1]?.role === 'user', { message: 'The last message must be from the customer' });
 
 const assistantResultSchema = z.object({
@@ -60,7 +68,7 @@ const assistantResultSchema = z.object({
 });
 
 aiRouter.post('/ai/assistant', asyncHandler(async (req, res) => {
-  const { messages } = assistantMessagesSchema.parse(req.body);
+  const { messages, language } = assistantMessagesSchema.parse(req.body);
   const [products, recentViews] = await prisma.$transaction([
     prisma.product.findMany({
       where: { status: ProductStatus.ACTIVE, inventory: { gt: 0 } },
@@ -74,7 +82,7 @@ aiRouter.post('/ai/assistant', asyncHandler(async (req, res) => {
   ]);
   if (!products.length) throw new AppError(503, 'No products are currently available');
 
-  const rawResult = await generateJson<unknown>(`Help the customer using the conversation and catalog below. Ask one focused follow-up question when requirements are unclear. When enough detail is available, recommend up to 4 best matches and explain the tradeoffs concisely. Prices are in Egyptian pounds.\n\nRECENT CUSTOMER INTERESTS:\n${JSON.stringify(recentViews.map((view) => view.product))}\n\nAVAILABLE CATALOG:\n${JSON.stringify(products.map((product) => ({
+  const rawResult = await generateJson<unknown>(`Help the customer using the conversation and catalog below. Ask one focused follow-up question when requirements are unclear. When enough detail is available, recommend up to 4 best matches and explain the tradeoffs concisely. Prices are in Egyptian pounds.${replyLanguage(language)}${language === 'ar' ? ' Write the follow-up suggestions in Arabic too.' : ''}\n\nRECENT CUSTOMER INTERESTS:\n${JSON.stringify(recentViews.map((view) => view.product))}\n\nAVAILABLE CATALOG:\n${JSON.stringify(products.map((product) => ({
     id: product.id, name: product.name, category: product.category.name, description: product.description.slice(0, 600),
     priceEGP: product.price.toString(), compareAtEGP: product.compareAt?.toString() ?? null,
     inventory: product.inventory, seller: product.seller.displayName,
@@ -102,6 +110,7 @@ aiRouter.post('/ai/assistant', asyncHandler(async (req, res) => {
 const visualSearchInputSchema = z.object({
   mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
   imageData: z.string().min(100).max(850_000).regex(/^[A-Za-z0-9+/]+={0,2}$/, 'Invalid image data'),
+  language: languageField,
 }).refine((value) => Buffer.byteLength(value.imageData, 'base64') <= 620_000, { message: 'Image is too large' });
 
 const visualSearchResultSchema = z.object({
@@ -117,7 +126,7 @@ aiRouter.post('/ai/visual-search', asyncHandler(async (req, res) => {
     include: { category: { select: { name: true, slug: true } }, seller: { select: { username: true, displayName: true, avatarUrl: true } } },
   });
   if (!products.length) throw new AppError(503, 'No products are currently available');
-  const rawResult = await generateJsonWithImage<unknown>(`Analyze the uploaded product image, then find up to 8 visually or functionally similar products from the available catalog. Prioritize the same product type, shape, material, color, style, and likely use. If there is no exact match, return the closest honest alternatives and explain the difference. Return JSON in exactly this shape: {"analysis":"one concise sentence","matches":[{"productId":"exact catalog ID","reason":"concise match explanation"}]}.\n\nAVAILABLE CATALOG:\n${JSON.stringify(products.map((product) => ({
+  const rawResult = await generateJsonWithImage<unknown>(`Analyze the uploaded product image, then find up to 8 visually or functionally similar products from the available catalog. Prioritize the same product type, shape, material, color, style, and likely use. If there is no exact match, return the closest honest alternatives and explain the difference.${replyLanguage(image.language)} Return JSON in exactly this shape: {"analysis":"one concise sentence","matches":[{"productId":"exact catalog ID","reason":"concise match explanation"}]}.\n\nAVAILABLE CATALOG:\n${JSON.stringify(products.map((product) => ({
     id: product.id, name: product.name, category: product.category.name,
     description: product.description.slice(0, 600), priceEGP: product.price.toString(),
   })))}`, { mimeType: image.mimeType, data: image.imageData }, {

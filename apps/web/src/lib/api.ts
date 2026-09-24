@@ -1,3 +1,5 @@
+import { translateMessage } from './i18n';
+
 // Production is served by the same Vercel project as the API. Never allow a
 // developer's local VITE_API_URL to be baked into a production storefront.
 export const API_URL = import.meta.env.PROD ? '/api' : (import.meta.env.VITE_API_URL ?? '/api');
@@ -49,7 +51,7 @@ if (typeof window !== 'undefined') {
 }
 
 export class ApiError extends Error {
-  constructor(message: string, public status: number) { super(message); }
+  constructor(message: string, public status: number) { super(translateMessage(message)); }
 }
 
 async function refreshAccessToken() {

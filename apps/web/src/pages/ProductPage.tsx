@@ -14,6 +14,7 @@ import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useWishlist } from '../hooks/useWishlist';
 import { api, hasAccessToken, type AiSummary, type Product } from '../lib/api';
 import { discountPercent, FREE_SHIPPING_THRESHOLD, money, stockLevel } from '../lib/utils';
+import { t, getLanguage } from '../lib/i18n';
 
 export function ProductPage() {
   const { slug } = useParams();
@@ -46,10 +47,10 @@ function ProductDetails({ slug }: { slug: string }) {
     if (!productId || !hasAccessToken()) return;
     api<void>(`/products/${productId}/views`, { method: 'POST' }).catch(() => undefined);
   }, [productId]);
-  const summarize = useMutation({ mutationFn: () => api<AiSummary>(`/ai/products/${productId}/summary`, { method: 'POST' }) });
+  const summarize = useMutation({ mutationFn: () => api<AiSummary>(`/ai/products/${productId}/summary`, { method: 'POST', body: JSON.stringify({ language: getLanguage() }) }) });
 
   if (isLoading) return <ProductSkeleton/>;
-  if (isError || !p) return <main className="container-shell"><EmptyState icon={PackageX} title="Product not found" action={<Button asChild><Link to="/shop">Return to the bazaar</Link></Button>}>This listing may have been removed or is no longer available.</EmptyState></main>;
+  if (isError || !p) return <main className="container-shell"><EmptyState icon={PackageX} title={t('Product not found')} action={<Button asChild><Link to="/shop">{t('Return to the bazaar')}</Link></Button>}>{t('This listing may have been removed or is no longer available.')}</EmptyState></main>;
 
   const requireAccount = (action: () => void) => hasAccessToken() ? action() : navigate('/login', { state: { from: location.pathname } });
   const images = [...new Set([p.imageUrl, ...(p.images ?? [])])].filter(Boolean);
@@ -73,61 +74,63 @@ function ProductDetails({ slug }: { slug: string }) {
   const rating = Number(p.ratingAverage);
   const relatedProducts = related.data?.products.filter((item) => item.id !== p.id).slice(0, 4) ?? [];
   const urgent = stockLevel(available) === 'urgent';
-  const optionLabel = variant ? ` in ${variant.options.join(' / ')}` : '';
-  const stock = soldOut ? { label: variant ? `${variant.options.join(' / ')} is sold out — try another option` : 'Sold out', tone: 'text-red-700' } : urgent ? { label: `Only ${available} left ${optionLabel ? optionLabel.trim() : 'in stock'} — order soon`, tone: 'text-red-600' } : { label: `In stock${optionLabel}, ready to ship`, tone: 'text-emerald-700' };
+  const option = variant ? variant.options.join(' / ') : '';
+  const stock = soldOut ? { label: variant ? t('{option} is sold out — try another option', { option }) : t('Sold out'), tone: 'text-red-700' }
+    : urgent ? { label: variant ? t('Only {count} left in {option} — order soon', { count: available, option }) : t('Only {count} left in stock — order soon', { count: available }), tone: 'text-red-600' }
+    : { label: variant ? t('In stock in {option}, ready to ship', { option }) : t('In stock, ready to ship'), tone: 'text-emerald-700' };
 
   return <main className="container-shell py-8 pb-28 sm:py-10 lg:pb-10">
-    <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-sm text-ink/50"><Link to="/shop" className="hover:text-ink">Shop</Link><ChevronRight size={14} className="shrink-0"/><Link to={`/shop?category=${p.category.slug}`} className="hover:text-ink">{p.category.name}</Link><ChevronRight size={14} className="shrink-0"/><span className="truncate text-ink/75" aria-current="page">{p.name}</span></nav>
+    <nav aria-label={t('Breadcrumb')} className="flex min-w-0 items-center gap-1.5 text-sm text-ink/50"><Link to="/shop" className="hover:text-ink">{t('Shop')}</Link><ChevronRight size={14} className="shrink-0"/><Link to={`/shop?category=${p.category.slug}`} className="hover:text-ink">{t(p.category.name)}</Link><ChevronRight size={14} className="shrink-0"/><span className="truncate text-ink/75" aria-current="page">{p.name}</span></nav>
     <div className="mt-6 grid gap-8 lg:grid-cols-2 lg:gap-14">
       <div className="lg:sticky lg:top-24 lg:self-start">
         <div className="relative aspect-square overflow-hidden rounded-[1.75rem] bg-sand">
           <img src={images[activeImage] ?? p.imageUrl} alt={p.name} className="size-full object-cover" fetchPriority="high"/>
-          {discount > 0 && <span className="absolute left-4 top-4 rounded-full bg-clay px-3 py-1.5 text-xs font-bold text-white">Save {discount}%</span>}
+          {discount > 0 && <span className="absolute start-4 top-4 rounded-full bg-clay px-3 py-1.5 text-xs font-bold text-white">{t('Save {discount}%', { discount })}</span>}
         </div>
-        {images.length > 1 && <div className="no-scrollbar mt-3 flex gap-3 overflow-x-auto" role="group" aria-label="Product images">{images.map((image, index) => <button type="button" key={image} onClick={() => setActiveImage(index)} aria-label={`Show image ${index + 1} of ${images.length}`} aria-pressed={index === activeImage} className={`size-20 shrink-0 overflow-hidden rounded-xl border-2 transition ${index === activeImage ? 'border-nile' : 'border-transparent opacity-70 hover:opacity-100'}`}><img src={image} alt="" className="size-full object-cover" loading="lazy"/></button>)}</div>}
+        {images.length > 1 && <div className="no-scrollbar mt-3 flex gap-3 overflow-x-auto" role="group" aria-label={t('Product images')}>{images.map((image, index) => <button type="button" key={image} onClick={() => setActiveImage(index)} aria-label={t('Show image {index} of {total}', { index: index + 1, total: images.length })} aria-pressed={index === activeImage} className={`size-20 shrink-0 overflow-hidden rounded-xl border-2 transition ${index === activeImage ? 'border-nile' : 'border-transparent opacity-70 hover:opacity-100'}`}><img src={image} alt="" className="size-full object-cover" loading="lazy"/></button>)}</div>}
       </div>
       <div className="flex flex-col">
-        <p className="eyebrow">{p.category.name}</p>
-        <h1 className="mt-3 text-balance font-display text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">{p.name}</h1>
-        <a href="#reviews" className="mt-3 flex w-fit items-center gap-2 text-sm text-ink/60 hover:text-ink">{p.reviewCount > 0 ? <><Stars value={rating} size={16}/><strong className="font-semibold text-ink">{rating.toFixed(1)}</strong><span className="underline decoration-ink/20 underline-offset-4">{p.reviewCount} review{p.reviewCount === 1 ? '' : 's'}</span></> : <span className="underline decoration-ink/20 underline-offset-4">No reviews yet — be the first</span>}</a>
-        <div className="mt-5 flex flex-wrap items-baseline gap-3"><p className="text-3xl font-bold">{money(p.price)}</p>{discount > 0 && <><s className="text-lg text-ink/40">{money(p.compareAt!)}</s><span className="rounded-full bg-clay/10 px-2.5 py-1 text-xs font-bold text-clay">You save {money(Number(p.compareAt) - Number(p.price))}</span></>}</div>
+        <p className="eyebrow">{t(p.category.name)}</p>
+        <h1 className="user-text mt-3 text-balance font-display text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">{p.name}</h1>
+        <a href="#reviews" className="mt-3 flex w-fit items-center gap-2 text-sm text-ink/60 hover:text-ink">{p.reviewCount > 0 ? <><Stars value={rating} size={16}/><strong className="font-semibold text-ink">{rating.toFixed(1)}</strong><span className="underline decoration-ink/20 underline-offset-4">{t('{count} reviews', { count: p.reviewCount })}</span></> : <span className="underline decoration-ink/20 underline-offset-4">{t('No reviews yet — be the first')}</span>}</a>
+        <div className="mt-5 flex flex-wrap items-baseline gap-3"><p className="text-3xl font-bold">{money(p.price)}</p>{discount > 0 && <><s className="text-lg text-ink/40">{money(p.compareAt!)}</s><span className="rounded-full bg-clay/10 px-2.5 py-1 text-xs font-bold text-clay">{t('You save {amount}', { amount: money(Number(p.compareAt) - Number(p.price)) })}</span></>}</div>
         <p className={`mt-3 flex items-center gap-2 text-sm font-semibold ${stock.tone} ${urgent ? 'w-fit rounded-full bg-red-50 px-3 py-1.5' : ''}`} role={urgent ? 'status' : undefined}><span className="size-2 rounded-full bg-current"/>{stock.label}</p>
-        <p className="mt-6 whitespace-pre-line text-[1.05rem] leading-8 text-ink/70">{p.description}</p>
+        <p className="user-text mt-6 whitespace-pre-line text-[1.05rem] leading-8 text-ink/70">{p.description}</p>
 
         {hasOptions && !listingSoldOut && <div className="mt-8"><OptionPicker optionNames={p.optionNames} variants={variants} selection={chosen} onChange={choose} missing={missingOption}/></div>}
 
         <div className="mt-8 flex gap-2 sm:gap-3">
           {!soldOut && <div className="flex shrink-0 items-center rounded-full border border-ink/12 bg-white focus-within:ring-2 focus-within:ring-nile/30">
-            <button type="button" aria-label="Decrease quantity" disabled={quantity <= 1} className="grid size-11 place-items-center rounded-full disabled:opacity-30 sm:size-12" onClick={() => setQuantity((value) => Math.max(1, value - 1))}><Minus size={16}/></button>
-            <input aria-label="Quantity" type="number" inputMode="numeric" min="1" max={maxQuantity} step="1" value={quantity} onChange={(event) => { const next = event.currentTarget.valueAsNumber; if (Number.isInteger(next) && next >= 1) setQuantity(Math.min(next, maxQuantity)); }} onFocus={(event) => event.currentTarget.select()} className="w-8 bg-transparent text-center font-semibold outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"/>
-            <button type="button" aria-label="Increase quantity" disabled={quantity >= maxQuantity} className="grid size-11 place-items-center rounded-full disabled:opacity-30 sm:size-12" onClick={() => setQuantity((value) => Math.min(maxQuantity, value + 1))}><Plus size={16}/></button>
+            <button type="button" aria-label={t('Decrease quantity')} disabled={quantity <= 1} className="grid size-11 place-items-center rounded-full disabled:opacity-30 sm:size-12" onClick={() => setQuantity((value) => Math.max(1, value - 1))}><Minus size={16}/></button>
+            <input aria-label={t('Quantity')} type="number" inputMode="numeric" min="1" max={maxQuantity} step="1" value={quantity} onChange={(event) => { const next = event.currentTarget.valueAsNumber; if (Number.isInteger(next) && next >= 1) setQuantity(Math.min(next, maxQuantity)); }} onFocus={(event) => event.currentTarget.select()} className="w-8 bg-transparent text-center font-semibold outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"/>
+            <button type="button" aria-label={t('Increase quantity')} disabled={quantity >= maxQuantity} className="grid size-11 place-items-center rounded-full disabled:opacity-30 sm:size-12" onClick={() => setQuantity((value) => Math.min(maxQuantity, value + 1))}><Plus size={16}/></button>
           </div>}
-          <Button className="min-w-0 flex-1 px-4" size="lg" disabled={soldOut || addToCart.isPending} onClick={add}>{soldOut ? (variant ? 'Option sold out' : 'Sold out') : addToCart.isPending ? 'Adding…' : 'Add to cart'}</Button>
-          <Button variant="outline" size="icon" className={`size-14 shrink-0 ${wishlist.saved ? 'border-red-200 bg-red-50 text-red-600' : ''}`} disabled={wishlist.isPending} onClick={() => requireAccount(() => wishlist.toggle())} aria-label={wishlist.saved ? 'Remove from wishlist' : 'Save to wishlist'} aria-pressed={wishlist.saved}><Heart size={19} fill={wishlist.saved ? 'currentColor' : 'none'}/></Button>
+          <Button className="min-w-0 flex-1 px-4" size="lg" disabled={soldOut || addToCart.isPending} onClick={add}>{soldOut ? (variant ? t('Option sold out') : t('Sold out')) : addToCart.isPending ? t('Adding…') : t('Add to cart')}</Button>
+          <Button variant="outline" size="icon" className={`size-14 shrink-0 ${wishlist.saved ? 'border-red-200 bg-red-50 text-red-600' : ''}`} disabled={wishlist.isPending} onClick={() => requireAccount(() => wishlist.toggle())} aria-label={wishlist.saved ? t('Remove from wishlist') : t('Save to wishlist')} aria-pressed={wishlist.saved}><Heart size={19} fill={wishlist.saved ? 'currentColor' : 'none'}/></Button>
         </div>
-        {!soldOut && <Button variant="secondary" size="lg" className="mt-3 w-full" disabled={addToCart.isPending} onClick={buyNow}>Buy now</Button>}
+        {!soldOut && <Button variant="secondary" size="lg" className="mt-3 w-full" disabled={addToCart.isPending} onClick={buyNow}>{t('Buy now')}</Button>}
 
         <ul className="mt-7 grid gap-3 rounded-2xl border border-ink/8 bg-white p-4 text-sm sm:grid-cols-3">
-          <li className="flex items-start gap-2.5"><Truck size={18} className="mt-0.5 shrink-0 text-nile"/><span><strong className="block font-semibold">Free shipping</strong><span className="text-ink/55">On orders over {money(FREE_SHIPPING_THRESHOLD)}</span></span></li>
-          <li className="flex items-start gap-2.5"><Banknote size={18} className="mt-0.5 shrink-0 text-nile"/><span><strong className="block font-semibold">Cash on delivery</strong><span className="text-ink/55">Pay when it arrives</span></span></li>
-          <li className="flex items-start gap-2.5"><ShieldCheck size={18} className="mt-0.5 shrink-0 text-nile"/><span><strong className="block font-semibold">Reviewed listing</strong><span className="text-ink/55">Approved by our team</span></span></li>
+          <li className="flex items-start gap-2.5"><Truck size={18} className="mt-0.5 shrink-0 text-nile"/><span><strong className="block font-semibold">{t('Free shipping')}</strong><span className="text-ink/55">{t('On orders over {amount}', { amount: money(FREE_SHIPPING_THRESHOLD) })}</span></span></li>
+          <li className="flex items-start gap-2.5"><Banknote size={18} className="mt-0.5 shrink-0 text-nile"/><span><strong className="block font-semibold">{t('Cash on delivery')}</strong><span className="text-ink/55">{t('Pay when it arrives')}</span></span></li>
+          <li className="flex items-start gap-2.5"><ShieldCheck size={18} className="mt-0.5 shrink-0 text-nile"/><span><strong className="block font-semibold">{t('Reviewed listing')}</strong><span className="text-ink/55">{t('Approved by our team')}</span></span></li>
         </ul>
 
-        <div className="mt-5 rounded-2xl border border-nile/15 bg-nile-light/35 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="flex items-center gap-2 font-semibold"><Sparkles size={17} className="text-nile"/>Quick AI summary</p><p className="mt-1 text-xs text-ink/55">A short, plain-language take on this product.</p></div><Button variant="outline" className="px-4 py-2" disabled={summarize.isPending} onClick={() => requireAccount(() => summarize.mutate())}>{summarize.isPending ? 'Summarizing…' : summarize.data ? 'Summarize again' : 'Summarize'}</Button></div>{summarize.data && <p className="mt-4 text-sm leading-6 text-ink/75" aria-live="polite">{summarize.data.summary}</p>}{summarize.error && <p className="mt-3 text-sm text-red-700" role="alert">{summarize.error instanceof Error ? summarize.error.message : 'Could not create the summary'}</p>}</div>
+        <div className="mt-5 rounded-2xl border border-nile/15 bg-nile-light/35 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="flex items-center gap-2 font-semibold"><Sparkles size={17} className="text-nile"/>{t('Quick AI summary')}</p><p className="mt-1 text-xs text-ink/55">{t('A short, plain-language take on this product.')}</p></div><Button variant="outline" className="px-4 py-2" disabled={summarize.isPending} onClick={() => requireAccount(() => summarize.mutate())}>{summarize.isPending ? t('Summarizing…') : summarize.data ? t('Summarize again') : t('Summarize')}</Button></div>{summarize.data && <p className="mt-4 text-sm leading-6 text-ink/75" aria-live="polite">{summarize.data.summary}</p>}{summarize.error && <p className="mt-3 text-sm text-red-700" role="alert">{summarize.error instanceof Error ? summarize.error.message : t('Could not create the summary')}</p>}</div>
 
-        <Link to={`/profiles/${p.seller.username}`} className="group mt-5 flex items-center gap-3 rounded-2xl bg-sand p-4 transition hover:bg-[#eee2cf]">{p.seller.avatarUrl ? <img src={p.seller.avatarUrl} alt="" className="size-11 rounded-full object-cover"/> : <span className="grid size-11 place-items-center rounded-full bg-nile text-lg font-bold text-white">{p.seller.displayName[0]}</span>}<div className="min-w-0 flex-1"><p className="text-xs text-ink/50">Sold by</p><p className="truncate font-semibold">{p.seller.displayName}</p></div><span className="text-sm font-semibold text-nile group-hover:underline">Visit shop</span></Link>
+        <Link to={`/profiles/${p.seller.username}`} className="group mt-5 flex items-center gap-3 rounded-2xl bg-sand p-4 transition hover:bg-[#eee2cf]">{p.seller.avatarUrl ? <img src={p.seller.avatarUrl} alt="" className="size-11 rounded-full object-cover"/> : <span className="grid size-11 place-items-center rounded-full bg-nile text-lg font-bold text-white">{p.seller.displayName[0]}</span>}<div className="min-w-0 flex-1"><p className="text-xs text-ink/50">{t('Sold by')}</p><p className="truncate font-semibold">{p.seller.displayName}</p></div><span className="text-sm font-semibold text-nile group-hover:underline">{t('Visit shop')}</span></Link>
       </div>
     </div>
 
     <Reviews product={p}/>
 
     {relatedProducts.length > 0 && <section className="mt-20 border-t border-ink/10 pt-12" aria-labelledby="related-title">
-      <div className="flex items-end justify-between gap-4"><h2 id="related-title" className="font-display text-3xl font-semibold">More in {p.category.name}</h2><Link to={`/shop?category=${p.category.slug}`} className="quiet-link">View all</Link></div>
+      <div className="flex items-end justify-between gap-4"><h2 id="related-title" className="font-display text-3xl font-semibold">{t('More in {category}', { category: t(p.category.name) })}</h2><Link to={`/shop?category=${p.category.slug}`} className="quiet-link">{t('View all')}</Link></div>
       <div className="product-grid mt-7">{relatedProducts.map((item) => <ProductCard key={item.id} product={item}/>)}</div>
     </section>}
 
     {!listingSoldOut && <div className="fixed inset-x-0 bottom-0 z-30 border-t border-ink/10 bg-[#fcfbf8]/95 px-4 py-3 backdrop-blur-lg lg:hidden">
-      <div className="mx-auto flex max-w-xl items-center gap-3"><div className="min-w-0 flex-1">{urgent && !soldOut ? <p className="truncate text-xs font-bold text-red-600">Only {available} left</p> : <p className="truncate text-xs text-ink/55">{variant ? variant.options.join(' / ') : p.name}</p>}<p className="font-bold">{money(Number(p.price) * quantity)}</p></div><Button disabled={soldOut || addToCart.isPending} onClick={add}>{soldOut ? 'Sold out' : addToCart.isPending ? 'Adding…' : hasOptions && !variant ? `Choose ${p.optionNames[0]!.toLowerCase()}` : 'Add to cart'}</Button></div>
+      <div className="mx-auto flex max-w-xl items-center gap-3"><div className="min-w-0 flex-1">{urgent && !soldOut ? <p className="truncate text-xs font-bold text-red-600">{t('Only {count} left', { count: available })}</p> : <p className="truncate text-xs text-ink/55">{variant ? variant.options.join(' / ') : p.name}</p>}<p className="font-bold">{money(Number(p.price) * quantity)}</p></div><Button disabled={soldOut || addToCart.isPending} onClick={add}>{soldOut ? t('Sold out') : addToCart.isPending ? t('Adding…') : hasOptions && !variant ? t('Choose {option}', { option: t(p.optionNames[0]!).toLowerCase() }) : t('Add to cart')}</Button></div>
     </div>}
   </main>;
 }
