@@ -6,7 +6,7 @@ import { EmptyState, PageIntro, PageLoader } from '../components/PageState';
 import { toast, toastError } from '../lib/toast';
 import { Button } from '../components/ui/Button';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
-import { api, ApiError, type AiSummary, type Cart } from '../lib/api';
+import { api, ApiError, type AiSummary, type Cart, type CartItem } from '../lib/api';
 import { FREE_SHIPPING_THRESHOLD, money, shippingFor, stockLevel } from '../lib/utils';
 
 export function FreeShippingMeter({ subtotal }: { subtotal: number }) {
@@ -43,7 +43,8 @@ export function CartPage() {
   if (error instanceof ApiError && error.status === 401) return <AuthRequired title="Your cart is waiting"/>;
   if (isLoading) return <PageLoader label="Loading your cart…"/>;
   const items = data?.cart.items ?? [];
-  const unavailable = items.filter((item) => item.product.status !== 'ACTIVE' || item.product.inventory < item.quantity);
+  const stockOf = (item: CartItem) => item.variant ? item.variant.inventory : item.product.inventory;
+  const unavailable = items.filter((item) => item.product.status !== 'ACTIVE' || stockOf(item) < item.quantity || (item.product.optionNames.length > 0 && !item.variant));
   const subtotal = items.reduce((sum, item) => sum + Number(item.product.price) * item.quantity, 0);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
   const shipping = shippingFor(subtotal);
@@ -54,7 +55,8 @@ export function CartPage() {
     <div className="mt-8 grid items-start gap-8 lg:grid-cols-[1fr_380px] lg:gap-10">
       <ul className="surface divide-y divide-ink/8 px-4 sm:px-6">{items.map((item) => {
         const active = item.product.status === 'ACTIVE';
-        const max = Math.min(item.product.inventory, 20);
+        const stock = stockOf(item);
+        const max = Math.min(stock, 20);
         const busy = update.isPending && update.variables?.id === item.id;
         const commitQuantity = (target: HTMLInputElement) => {
           const quantity = target.valueAsNumber;
@@ -66,11 +68,13 @@ export function CartPage() {
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-wider text-nile">{item.product.category.name}</p>
             {active ? <Link to={`/products/${item.product.slug}`} className="mt-1 block font-semibold leading-snug hover:text-clay sm:text-lg">{item.product.name}</Link> : <p className="mt-1 font-semibold sm:text-lg">{item.product.name}</p>}
+            {item.variant && <p className="mt-1.5 flex flex-wrap gap-1.5">{item.product.optionNames.map((name, index) => <span key={name} className="rounded-md bg-sand px-2 py-0.5 text-xs font-medium text-ink/75">{name}: <strong className="font-semibold text-ink">{item.variant!.options[index]}</strong></span>)}</p>}
             <p className="mt-1 text-sm text-ink/55">{money(item.product.price)} each · by {item.product.seller.displayName}</p>
             {!active && <p className="mt-2 text-xs font-semibold text-red-700">No longer available — please remove it</p>}
-            {active && item.product.inventory < item.quantity && <p className="mt-2 text-xs font-semibold text-red-700">Only {item.product.inventory} left — lower the quantity to continue</p>}{active && item.product.inventory >= item.quantity && stockLevel(item.product.inventory) === 'urgent' && <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-red-600"><span className="size-1.5 rounded-full bg-current"/>Only {item.product.inventory} left in stock</p>}
+            {active && item.product.optionNames.length > 0 && !item.variant && <p className="mt-2 text-xs font-semibold text-red-700">Choose a {item.product.optionNames[0]!.toLowerCase()} — <Link to={`/products/${item.product.slug}`} className="underline">pick an option</Link> and remove this line</p>}
+            {active && stock < item.quantity && (stock > 0 ? <p className="mt-2 text-xs font-semibold text-red-700">Only {stock} left — lower the quantity to continue</p> : <p className="mt-2 text-xs font-semibold text-red-700">Sold out — please remove it</p>)}{active && stock >= item.quantity && stockLevel(stock) === 'urgent' && <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-red-600"><span className="size-1.5 rounded-full bg-current"/>Only {stock} left in stock</p>}
             <div className="mt-3 flex items-center gap-4">
-              <div className={`inline-flex items-center rounded-full border border-ink/12 bg-white ${busy ? 'opacity-60' : ''}`}>
+              <div className={`inline-flex items-center rounded-full border border-ink/12 bg-white focus-within:ring-2 focus-within:ring-nile/30 ${busy ? 'opacity-60' : ''}`}>
                 <button type="button" aria-label={`Decrease quantity of ${item.product.name}`} disabled={!active || item.quantity <= 1 || busy} onClick={() => update.mutate({ id: item.id, quantity: item.quantity - 1 })} className="grid size-9 place-items-center rounded-full disabled:opacity-30"><Minus size={14}/></button>
                 <input key={`${item.id}-${item.quantity}`} aria-label={`Quantity of ${item.product.name}`} type="number" inputMode="numeric" min="1" max={max} step="1" defaultValue={item.quantity} disabled={!active || busy} onBlur={(event) => commitQuantity(event.currentTarget)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }} className="w-9 bg-transparent text-center text-sm font-semibold outline-none [appearance:textfield] disabled:opacity-40 [&::-webkit-inner-spin-button]:appearance-none"/>
                 <button type="button" aria-label={`Increase quantity of ${item.product.name}`} disabled={!active || item.quantity >= max || busy} onClick={() => update.mutate({ id: item.id, quantity: item.quantity + 1 })} className="grid size-9 place-items-center rounded-full disabled:opacity-30"><Plus size={14}/></button>

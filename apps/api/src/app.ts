@@ -6,6 +6,8 @@ import helmet from 'helmet';
 import { env } from './config/env.js';
 import { authRouter } from './routes/auth.js';
 import { catalogRouter } from './routes/catalog.js';
+import { reviewsRouter } from './routes/reviews.js';
+import { accountRouter } from './routes/account.js';
 import { shoppingRouter } from './routes/shopping.js';
 import { sellerRouter } from './routes/seller.js';
 import { adminRouter } from './routes/admin.js';
@@ -29,6 +31,8 @@ app.use('/api', rateLimit({
 // session refresh on every page load and lock out shoppers sharing a carrier-grade NAT address.
 app.use('/api/auth', authRouter);
 app.use('/api', catalogRouter);
+app.use('/api', reviewsRouter);
+app.use('/api', accountRouter);
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 app.use('/api', shoppingRouter);
 app.use('/api', sellerRouter);

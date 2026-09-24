@@ -1,7 +1,8 @@
-import { Bell, Bot, Camera, ChevronDown, Heart, LogOut, Menu, Package, Search, ShieldCheck, ShoppingBag, Sparkles, Store, TicketPercent, UserRound, X } from 'lucide-react';
+import { Bell, Bot, Camera, ChevronDown, Heart, LogOut, Menu, Package, Search, Settings, ShieldCheck, ShoppingBag, Sparkles, Store, TicketPercent, UserRound, X } from 'lucide-react';
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { SearchInput } from '../SearchInput';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Button } from '../ui/Button';
 import { api, setAccessToken, type Cart, type Notification } from '../../lib/api';
@@ -35,9 +36,9 @@ function SearchForm({ className = '', autoFocus = false }: { className?: string;
     const term = value.trim();
     navigate(term ? `/shop?search=${encodeURIComponent(term)}` : '/shop');
   };
-  return <form role="search" className={`flex items-center rounded-full border border-ink/10 bg-white pl-4 pr-1.5 transition focus-within:border-nile/50 focus-within:ring-4 focus-within:ring-nile/8 ${className}`} onSubmit={submit}>
+  return <form role="search" className={`relative flex items-center rounded-full border border-ink/10 bg-white pl-4 pr-1.5 transition focus-within:border-nile/50 focus-within:ring-4 focus-within:ring-nile/8 ${className}`} onSubmit={submit}>
     <Search size={17} className="shrink-0 text-ink/40" aria-hidden="true"/>
-    <input type="search" value={value} onChange={(event) => setValue(event.target.value)} autoFocus={autoFocus} placeholder="Search products, brands, gifts…" aria-label="Search products" maxLength={100} className="min-w-0 w-full bg-transparent px-3 py-2.5 text-sm outline-none [&::-webkit-search-cancel-button]:hidden"/>
+    <SearchInput value={value} onValueChange={setValue} autoFocus={autoFocus} placeholder="Search products, brands, gifts…" aria-label="Search products" maxLength={100} className="min-w-0 w-full bg-transparent px-3 py-2.5 text-sm outline-none [&::-webkit-search-cancel-button]:hidden"/>
     {value && <button type="button" onClick={() => setValue('')} aria-label="Clear search" className="grid size-7 shrink-0 place-items-center rounded-full text-ink/40 hover:bg-sand hover:text-ink"><X size={14}/></button>}
   </form>;
 }
@@ -84,6 +85,7 @@ export function Header() {
   const accountLinks = [
     { to: '/orders', label: 'Orders', icon: Package },
     { to: '/wishlist', label: 'Wishlist', icon: Heart },
+    { to: '/account', label: 'Account settings', icon: Settings },
     { to: '/seller', label: 'Seller Center', icon: Store },
     ...(user?.role === 'ADMIN' ? [{ to: '/admin', label: 'Admin Panel', icon: ShieldCheck }, { to: '/admin/coupons', label: 'Coupons', icon: TicketPercent }] : []),
     ...(user ? [{ to: `/profiles/${user.username}`, label: 'Public profile', icon: UserRound }] : []),

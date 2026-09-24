@@ -100,15 +100,21 @@ export function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export type User = { id?: string; email?: string; username: string; displayName: string; avatarUrl?: string; bio?: string; role: 'CUSTOMER' | 'SELLER' | 'ADMIN'; status?: 'ACTIVE' | 'SUSPENDED'; createdAt: string };
 export type Category = { id: string; name: string; slug: string; description?: string; imageUrl?: string; _count?: { products: number } };
-export type Product = { id: string; name: string; slug: string; description: string; price: string; compareAt?: string; imageUrl: string; images: string[]; inventory: number; featured: boolean; status?: ProductStatus; category: Category; seller: Pick<User, 'username' | 'displayName' | 'avatarUrl' | 'bio'> };
+export type Variant = { id: string; options: string[]; inventory: number };
+export type Product = { id: string; name: string; slug: string; description: string; price: string; compareAt?: string; imageUrl: string; images: string[]; inventory: number; featured: boolean; status?: ProductStatus; category: Category; seller: Pick<User, 'username' | 'displayName' | 'avatarUrl' | 'bio'>; optionNames: string[]; ratingAverage: string; reviewCount: number; variants?: Variant[] };
+export type Review = { id: string; rating: number; title?: string | null; body: string; verified: boolean; createdAt: string; updatedAt: string; user: Pick<User, 'username' | 'displayName' | 'avatarUrl'> };
+export type ReviewPage = { reviews: Review[]; summary: { average: number; count: number; distribution: Record<'1' | '2' | '3' | '4' | '5', number> }; pagination: { page: number; limit: number; total: number; pages: number } };
+export type MyReview = { review: Review | null; canReview: boolean; reason?: string; verifiedPurchase: boolean };
+export type SearchSuggestions = { products: (Pick<Product, 'id' | 'name' | 'slug' | 'imageUrl' | 'price'> & { category: Pick<Category, 'name'> })[]; categories: Pick<Category, 'name' | 'slug'>[] };
+export type Address = { id: string; label: string; fullName: string; phone: string; street: string; city: string; region: string; notes?: string | null; isDefault: boolean; createdAt: string; updatedAt: string };
 export type Recommendations = { products: Product[]; personalized: boolean; reason: string };
 export type AiSummary = { summary: string };
 export type AssistantResponse = { reply: string; products: Product[]; suggestions: string[] };
 export type VisualSearchResponse = { analysis: string; results: { product: Product; reason: string }[] };
-export type CartItem = { id: string; quantity: number; product: Product };
+export type CartItem = { id: string; quantity: number; product: Product; variant?: Variant | null };
 export type Cart = { id: string; items: CartItem[]; updatedAt: string };
 export type WishlistItem = { id: string; product: Product; createdAt: string };
-export type OrderItem = { id: string; productId?: string; productName: string; productSlug: string; imageUrl: string; unitPrice: string; quantity: number; lineTotal: string };
+export type OrderItem = { id: string; productId?: string; productName: string; productSlug: string; imageUrl: string; unitPrice: string; quantity: number; lineTotal: string; variantLabel?: string | null };
 export type OrderStatus = 'PENDING' | 'CONFIRMED' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED';
 export type Order = {
   id: string; orderNumber: string; status: OrderStatus;

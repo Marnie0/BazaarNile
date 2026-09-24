@@ -7,10 +7,13 @@ import { EmptyState, PageIntro } from '../components/PageState';
 import { ProductSkeleton } from '../components/Skeleton';
 import { Button } from '../components/ui/Button';
 import { ScrollRow } from '../components/ui/ScrollRow';
+import { PriceFilter } from '../components/PriceFilter';
+import { SearchInput } from '../components/SearchInput';
 import { api, type Category, type Product } from '../lib/api';
+import { priceLabel } from '../lib/utils';
 
 type ProductPage = { products: Product[]; pagination: { page: number; limit: number; total: number; pages: number } };
-const sorts = [['newest', 'Newest first'], ['price-asc', 'Price: low to high'], ['price-desc', 'Price: high to low']] as const;
+const sorts = [['newest', 'Newest first'], ['rating', 'Top rated'], ['price-asc', 'Price: low to high'], ['price-desc', 'Price: high to low']] as const;
 
 function pageWindow(page: number, pages: number) {
   const numbers = new Set([1, pages, page - 1, page, page + 1].filter((value) => value >= 1 && value <= pages));
@@ -25,6 +28,9 @@ export function ShopPage() {
   const onSale = params.get('onSale') === 'true';
   const inStock = params.get('inStock') === 'true';
   const sort = params.get('sort') ?? 'newest';
+  const minPrice = params.get('minPrice') ?? '';
+  const maxPrice = params.get('maxPrice') ?? '';
+  const topRated = params.get('minRating') === '4';
   const [draft, setDraft] = useState(search);
   useEffect(() => setDraft(search), [search]);
   const query = params.toString();
@@ -45,6 +51,8 @@ export function ShopPage() {
     ...(featured ? [{ key: 'featured', label: 'Featured' }] : []),
     ...(onSale ? [{ key: 'onSale', label: 'On sale' }] : []),
     ...(inStock ? [{ key: 'inStock', label: 'In stock' }] : []),
+    ...(topRated ? [{ key: 'minRating', label: '4★ & up' }] : []),
+    ...(minPrice || maxPrice ? [{ key: 'price', label: priceLabel(minPrice, maxPrice) }] : []),
   ];
   const pagination = data?.pagination;
   const firstShown = pagination && pagination.total ? (pagination.page - 1) * pagination.limit + 1 : 0;
@@ -57,20 +65,24 @@ export function ShopPage() {
 
     <div className="z-30 -mx-4 mt-8 border-y border-ink/8 bg-[#fbf8f1]/95 px-4 py-3 backdrop-blur-md md:sticky md:top-[4.5rem]">
       <div className="flex flex-col gap-3 md:flex-row md:items-center">
-        <form onSubmit={submitSearch} className="hidden flex-1 items-center md:flex gap-2 rounded-full border border-ink/10 bg-white pl-4 pr-1.5 focus-within:border-nile/50 focus-within:ring-4 focus-within:ring-nile/8" role="search">
+        <form onSubmit={submitSearch} className="relative hidden flex-1 items-center md:flex gap-2 rounded-full border border-ink/10 bg-white pl-4 pr-1.5 focus-within:border-nile/50 focus-within:ring-4 focus-within:ring-nile/8" role="search">
           <Search size={17} className="shrink-0 text-ink/40" aria-hidden="true"/>
-          <input type="search" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={100} placeholder="What are you looking for?" aria-label="Search products" className="min-w-0 flex-1 bg-transparent py-2.5 outline-none [&::-webkit-search-cancel-button]:hidden"/>
+          <SearchInput value={draft} onValueChange={setDraft} maxLength={100} placeholder="What are you looking for?" aria-label="Search products" className="min-w-0 flex-1 bg-transparent py-2.5 outline-none [&::-webkit-search-cancel-button]:hidden"/>
           {draft && <button type="button" onClick={() => { setDraft(''); if (search) update({ search: '' }); }} aria-label="Clear search" className="grid size-8 place-items-center rounded-full text-ink/40 hover:bg-sand hover:text-ink"><X size={15}/></button>}
           <Button type="submit" className="px-4 py-2">Search</Button>
         </form>
-        <label className="flex items-center gap-2 text-sm font-medium text-ink/60"><span className="shrink-0">Sort by</span>
+        <div className="flex items-center gap-2">
+        <PriceFilter min={minPrice} max={maxPrice} onApply={update}/>
+        <label className="flex min-w-0 items-center gap-2 text-sm font-medium text-ink/60"><span className="hidden shrink-0 sm:inline">Sort by</span>
           <select value={sort} onChange={(event) => update({ sort: event.target.value === 'newest' ? '' : event.target.value })} className="field select-field rounded-full py-2.5 pr-8 text-ink">{sorts.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
         </label>
+        </div>
       </div>
       <ScrollRow frameClassName="-mx-4 mt-3" className="no-scrollbar flex gap-2 overflow-x-auto px-4 pb-0.5" role="group" aria-label="Filter by category">
         <button type="button" onClick={() => update({ category: '' })} aria-pressed={!category} className={`chip ${!category ? 'is-active' : ''}`}>All</button>
         <button type="button" onClick={() => update({ onSale: onSale ? '' : 'true' })} aria-pressed={onSale} className={`chip ${onSale ? 'is-active' : ''}`}>On sale</button>
         <button type="button" onClick={() => update({ inStock: inStock ? '' : 'true' })} aria-pressed={inStock} className={`chip ${inStock ? 'is-active' : ''}`}>In stock</button>
+        <button type="button" onClick={() => update({ minRating: topRated ? '' : '4' })} aria-pressed={topRated} className={`chip ${topRated ? 'is-active' : ''}`}>4★ &amp; up</button>
         <button type="button" onClick={() => update({ featured: featured ? '' : 'true' })} aria-pressed={featured} className={`chip ${featured ? 'is-active' : ''}`}>Featured</button>
         <span className="mx-1 w-px shrink-0 self-stretch bg-ink/12" aria-hidden="true"/>
         {cats?.categories.map((item) => <button type="button" key={item.id} onClick={() => update({ category: item.slug === category ? '' : item.slug })} aria-pressed={item.slug === category} className={`chip ${item.slug === category ? 'is-active' : ''}`}>{item.name}{item._count && <span className="opacity-55">{item._count.products}</span>}</button>)}
@@ -79,7 +91,7 @@ export function ShopPage() {
 
     <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-sm text-ink/60" aria-live="polite">
       <p>{isLoading ? 'Finding products…' : pagination?.total ? `Showing ${firstShown}–${lastShown} of ${pagination.total} products` : ''}</p>
-      {filters.length > 0 && <div className="flex flex-wrap items-center gap-2">{filters.map((filter) => <button key={filter.key} type="button" onClick={() => update({ [filter.key]: '' })} className="inline-flex items-center gap-1.5 rounded-full bg-nile-light/70 px-3 py-1.5 text-xs font-semibold text-nile hover:bg-nile-light" aria-label={`Remove filter ${filter.label}`}>{filter.label}<X size={13}/></button>)}<button type="button" onClick={() => setParams(new URLSearchParams(sort !== 'newest' ? { sort } : {}))} className="text-xs font-semibold text-ink/55 underline underline-offset-4 hover:text-ink">Clear all</button></div>}
+      {filters.length > 0 && <div className="flex flex-wrap items-center gap-2">{filters.map((filter) => <button key={filter.key} type="button" onClick={() => update(filter.key === 'price' ? { minPrice: '', maxPrice: '' } : { [filter.key]: '' })} className="inline-flex items-center gap-1.5 rounded-full bg-nile-light/70 px-3 py-1.5 text-xs font-semibold text-nile hover:bg-nile-light" aria-label={`Remove filter ${filter.label}`}>{filter.label}<X size={13}/></button>)}<button type="button" onClick={() => setParams(new URLSearchParams(sort !== 'newest' ? { sort } : {}))} className="text-xs font-semibold text-ink/55 underline underline-offset-4 hover:text-ink">Clear all</button></div>}
     </div>
 
     {isError ? <EmptyState icon={SearchX} title="We couldn’t load products" action={<Button variant="outline" onClick={() => refetch()}>Try again</Button>}>Check your connection, then try again.</EmptyState>

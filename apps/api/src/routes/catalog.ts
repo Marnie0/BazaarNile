@@ -21,20 +21,30 @@ catalogRouter.get('/products', asyncHandler(async (req, res) => {
     search: z.string().trim().max(100).optional(), category: z.string().max(80).optional(),
     featured: z.enum(['true', 'false']).optional(), onSale: z.enum(['true']).optional(), inStock: z.enum(['true']).optional(), page: z.coerce.number().int().positive().default(1),
     limit: z.coerce.number().int().min(1).max(48).default(12),
-    sort: z.enum(['newest', 'price-asc', 'price-desc']).default('newest'),
+    minPrice: z.coerce.number().min(0).max(99_999_999).optional(), maxPrice: z.coerce.number().min(0).max(99_999_999).optional(),
+    minRating: z.coerce.number().int().min(1).max(5).optional(),
+    sort: z.enum(['newest', 'price-asc', 'price-desc', 'rating']).default('newest'),
   }).parse(req.query);
+  const price = { ...(query.minPrice !== undefined && { gte: query.minPrice }), ...(query.maxPrice !== undefined && { lte: query.maxPrice }) };
   const where: Prisma.ProductWhereInput = {
     status: ProductStatus.ACTIVE,
     ...(query.category && { category: { slug: query.category } }),
     ...(query.featured && { featured: query.featured === 'true' }),
     ...(query.onSale && { compareAt: { not: null } }),
     ...(query.inStock && { inventory: { gt: 0 } }),
+    ...(Object.keys(price).length && { price }),
+    ...(query.minRating && { reviewCount: { gt: 0 }, ratingAverage: { gte: query.minRating } }),
     ...(query.search && { OR: [
       { name: { contains: query.search, mode: 'insensitive' } },
       { description: { contains: query.search, mode: 'insensitive' } },
     ]}),
   };
-  const orderBy = query.sort === 'price-asc' ? { price: 'asc' as const } : query.sort === 'price-desc' ? { price: 'desc' as const } : { createdAt: 'desc' as const };
+  const sortBy: Record<typeof query.sort, Prisma.ProductOrderByWithRelationInput[]> = {
+    newest: [{ createdAt: 'desc' }], 'price-asc': [{ price: 'asc' }], 'price-desc': [{ price: 'desc' }],
+    rating: [{ ratingAverage: 'desc' }, { reviewCount: 'desc' }],
+  };
+  // The id tiebreaker keeps pagination stable when many products share a price or rating.
+  const orderBy = [...sortBy[query.sort], { id: 'asc' as const }];
   const [products, total] = await prisma.$transaction([
     prisma.product.findMany({ where, orderBy, skip: (query.page - 1) * query.limit, take: query.limit,
       include: { category: { select: { name: true, slug: true } }, seller: { select: { username: true, displayName: true, avatarUrl: true } } } }),
@@ -43,11 +53,24 @@ catalogRouter.get('/products', asyncHandler(async (req, res) => {
   res.json({ products, pagination: { page: query.page, limit: query.limit, total, pages: Math.ceil(total / query.limit) } });
 }));
 
+// Type-ahead for the search box: a few matching products and categories, cheapest query first.
+catalogRouter.get('/search/suggest', asyncHandler(async (req, res) => {
+  const { q } = z.object({ q: z.string().trim().min(1).max(100) }).parse(req.query);
+  const [products, categories] = await Promise.all([
+    prisma.product.findMany({ where: { status: ProductStatus.ACTIVE, name: { contains: q, mode: 'insensitive' } },
+      orderBy: [{ featured: 'desc' }, { reviewCount: 'desc' }, { createdAt: 'desc' }], take: 6,
+      select: { id: true, name: true, slug: true, imageUrl: true, price: true, category: { select: { name: true } } } }),
+    prisma.category.findMany({ where: { name: { contains: q, mode: 'insensitive' } }, orderBy: { name: 'asc' }, take: 3, select: { name: true, slug: true } }),
+  ]);
+  res.json({ products, categories });
+}));
+
 catalogRouter.get('/products/:slug', asyncHandler(async (req, res) => {
   const slug = z.string().parse(req.params.slug);
   const product = await prisma.product.findFirst({
     where: { slug, status: ProductStatus.ACTIVE },
-    include: { category: true, seller: { select: { username: true, displayName: true, avatarUrl: true, bio: true } } },
+    include: { category: true, seller: { select: { username: true, displayName: true, avatarUrl: true, bio: true } },
+      variants: { orderBy: { position: 'asc' }, select: { id: true, options: true, inventory: true } } },
   });
   if (!product) throw new AppError(404, 'Product not found');
   res.json({ product });

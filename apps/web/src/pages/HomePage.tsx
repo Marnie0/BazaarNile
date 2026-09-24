@@ -10,6 +10,7 @@ import { useIsAuthenticated } from '../hooks/useSession';
 import { api, type Category, type Product, type Recommendations, type Shop } from '../lib/api';
 import { discountPercent, FREE_SHIPPING_THRESHOLD, money } from '../lib/utils';
 import { ScrollRow } from '../components/ui/ScrollRow';
+import { SearchInput } from '../components/SearchInput';
 
 const popularSearches = ['Coffee', 'Sneakers', 'Skincare', 'Lamp', 'Notebook', 'Tent'];
 type ProductList = { products: Product[]; pagination: { total: number } };
@@ -32,16 +33,17 @@ function Hero({ deals, productCount }: { deals: Product[]; productCount?: number
   const topDeal = deals[0];
   return <section className="container-shell pt-4 sm:pt-6" aria-labelledby="hero-title">
     {/* The photo frames the centre with objects at its edges, so the content sits in the open stone. */}
-    <div className="relative isolate overflow-hidden rounded-[2rem] bg-[#eadcc3]">
-      <img src="/images/market-spread.webp" alt="" aria-hidden="true" fetchPriority="high" className="absolute inset-0 -z-10 size-full object-cover"/>
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_center,rgba(244,236,221,.55),rgba(244,236,221,0)_70%)]"/>
+    {/* Not overflow-hidden: the search suggestions list must be able to extend below the banner. */}
+    <div className="relative isolate z-10 rounded-[2rem] bg-[#eadcc3]">
+      <img src="/images/market-spread.webp" alt="" aria-hidden="true" fetchPriority="high" className="absolute inset-0 -z-10 size-full rounded-[2rem] object-cover"/>
+      <div className="absolute inset-0 -z-10 rounded-[2rem] bg-[radial-gradient(ellipse_at_center,rgba(244,236,221,.55),rgba(244,236,221,0)_70%)]"/>
       <motion.div className="mx-auto flex max-w-3xl flex-col items-center px-5 py-12 text-center sm:px-10 sm:py-16 lg:py-[4.5rem]" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .55 }}>
         <p className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3.5 py-1.5 text-xs font-semibold text-ink/75 backdrop-blur"><span className="size-1.5 rounded-full bg-emerald-600"/>Egypt’s marketplace for independent sellers</p>
         <h1 id="hero-title" className="mt-5 text-balance font-display text-[2.8rem] font-medium leading-[.95] tracking-[-.03em] sm:text-6xl lg:text-[4.6rem]">A good find leads to another.</h1>
         <p className="mt-5 max-w-xl text-base leading-7 text-ink/70 sm:text-lg sm:leading-8">{productCount ? `${productCount}+ products` : 'Hundreds of products'} from makers, roasters, and small shops across Egypt. Cash on delivery, free shipping over {money(FREE_SHIPPING_THRESHOLD)}.</p>
-        <form onSubmit={submit} role="search" className="mt-7 flex w-full max-w-xl items-center gap-2 rounded-full border border-ink/10 bg-white p-1.5 pl-5 shadow-[0_16px_45px_rgba(19,33,27,.12)] focus-within:border-nile/50 focus-within:ring-4 focus-within:ring-nile/10">
+        <form onSubmit={submit} role="search" className="relative mt-7 flex w-full max-w-xl items-center gap-2 rounded-full border border-ink/10 bg-white p-1.5 pl-5 shadow-[0_16px_45px_rgba(19,33,27,.12)] focus-within:border-nile/50 focus-within:ring-4 focus-within:ring-nile/10">
           <Search size={19} className="shrink-0 text-ink/40" aria-hidden="true"/>
-          <input type="search" value={term} onChange={(event) => setTerm(event.target.value)} maxLength={100} placeholder="What are you looking for today?" aria-label="Search products" className="min-w-0 flex-1 bg-transparent py-2.5 text-base outline-none [&::-webkit-search-cancel-button]:hidden"/>
+          <SearchInput value={term} onValueChange={setTerm} maxLength={100} placeholder="What are you looking for today?" aria-label="Search products" className="min-w-0 flex-1 bg-transparent py-2.5 text-base outline-none [&::-webkit-search-cancel-button]:hidden"/>
           <Button type="submit" className="px-5 sm:px-6">Search</Button>
         </form>
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm"><span className="rounded-full bg-ink px-3 py-1.5 font-semibold text-white shadow-sm">Popular</span>{popularSearches.map((item) => <Link key={item} to={`/shop?search=${encodeURIComponent(item.toLowerCase())}`} className="rounded-full bg-white/70 px-3 py-1.5 font-medium text-ink/75 backdrop-blur transition hover:bg-white hover:text-ink">{item}</Link>)}</div>

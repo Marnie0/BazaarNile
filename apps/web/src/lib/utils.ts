@@ -19,3 +19,6 @@ export const LOW_STOCK = 5;
 export type StockLevel = 'out' | 'urgent' | 'low' | 'ok';
 export const stockLevel = (inventory: number): StockLevel =>
   inventory <= 0 ? 'out' : inventory <= URGENT_STOCK ? 'urgent' : inventory <= LOW_STOCK ? 'low' : 'ok';
+
+export const priceLabel = (min: string, max: string) =>
+  min && max ? `${money(min)} – ${money(max)}` : min ? `${money(min)} & above` : max ? `Under ${money(max)}` : '';

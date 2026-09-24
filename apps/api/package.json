@@ -14,7 +14,8 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
-    "db:seed:catalog": "tsx prisma/seed-catalog.ts"
+    "db:seed:catalog": "tsx prisma/seed-catalog.ts",
+    "db:seed:reviews": "tsx prisma/seed-reviews-options.ts"
   },
   "prisma": { "seed": "tsx prisma/seed.ts" },
   "dependencies": {

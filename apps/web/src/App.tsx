@@ -27,6 +27,7 @@ const AdminDashboardPage = named(() => import('./pages/AdminDashboardPage'), 'Ad
 const AdminCouponsPage = named(() => import('./pages/AdminCouponsPage'), 'AdminCouponsPage');
 const AssistantPage = named(() => import('./pages/AssistantPage'), 'AssistantPage');
 const VisualSearchPage = named(() => import('./pages/VisualSearchPage'), 'VisualSearchPage');
+const AccountPage = named(() => import('./pages/AccountPage'), 'AccountPage');
 const NotificationsPage = named(() => import('./pages/NotificationsPage'), 'NotificationsPage');
 const LoginPage = lazy(() => import('./pages/AuthPage').then((module) => ({ default: () => <module.AuthPage mode="login"/> })));
 const RegisterPage = lazy(() => import('./pages/AuthPage').then((module) => ({ default: () => <module.AuthPage mode="register"/> })));
@@ -54,6 +55,7 @@ export default function App() {
           <Route path="/wishlist" element={<WishlistPage/>}/>
           <Route path="/checkout" element={<CheckoutPage/>}/>
           <Route path="/orders" element={<OrdersPage/>}/>
+          <Route path="/account" element={<AccountPage/>}/>
           <Route path="/seller" element={<SellerDashboardPage/>}/>
           <Route path="/seller/products/new" element={<SellerProductFormPage/>}/>
           <Route path="/seller/products/:id/edit" element={<SellerProductFormPage/>}/>

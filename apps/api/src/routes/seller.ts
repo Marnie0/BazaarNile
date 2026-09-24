@@ -2,6 +2,7 @@ import { OrderStatus, Prisma, ProductStatus, Role } from '@prisma/client';
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
+import { checkVariants, optionsSchema, syncVariants } from '../lib/stock.js';
 import { requireAuth } from '../middleware/auth.js';
 import { requireSeller } from '../middleware/seller.js';
 import { asyncHandler } from '../utils/async-handler.js';
@@ -13,6 +14,7 @@ sellerRouter.use('/seller', requireAuth);
 const productInclude = {
   category: { select: { id: true, name: true, slug: true } },
   _count: { select: { orderItems: true } },
+  variants: { orderBy: { position: 'asc' as const }, select: { id: true, options: true, inventory: true } },
 } as const;
 
 // Only http(s) images may be stored; z.url() alone also accepts schemes such as javascript: and data:.
@@ -23,7 +25,7 @@ const productFields = z.object({
   compareAt: z.union([z.coerce.number().positive().max(99_999_999), z.literal(''), z.null()]).optional(),
   imageUrl, images: z.array(imageUrl).max(8).optional(),
   inventory: z.coerce.number().int().min(0).max(1_000_000), categoryId: z.string().min(1),
-  status: z.enum(ProductStatus),
+  status: z.enum(ProductStatus), ...optionsSchema,
 });
 const productSchema = productFields.extend({ status: productFields.shape.status.default(ProductStatus.ACTIVE) });
 // Built from the default-free fields: in Zod 4 a default survives .partial(), which would silently
@@ -91,17 +93,26 @@ sellerRouter.get('/seller/products/:id', asyncHandler(async (req, res) => {
 }));
 
 sellerRouter.post('/seller/products', asyncHandler(async (req, res) => {
-  const data = productSchema.parse(req.body);
+  const { variants = [], optionNames = [], ...data } = productSchema.parse(req.body);
+  checkVariants(optionNames, variants);
   if (!(await prisma.category.findUnique({ where: { id: data.categoryId }, select: { id: true } }))) throw new AppError(400, 'Category not found');
-  const product = await prisma.product.create({ data: { ...data, status: data.status === ProductStatus.DRAFT ? ProductStatus.DRAFT : ProductStatus.PENDING,
-    compareAt: data.compareAt === '' || data.compareAt == null ? null : data.compareAt,
-    images: data.images?.length ? data.images : [data.imageUrl], slug: await uniqueSlug(data.name), sellerId: req.user!.id }, include: productInclude });
+  const slug = await uniqueSlug(data.name);
+  const product = await prisma.$transaction(async (tx) => {
+    const created = await tx.product.create({ data: { ...data, optionNames, status: data.status === ProductStatus.DRAFT ? ProductStatus.DRAFT : ProductStatus.PENDING,
+      compareAt: data.compareAt === '' || data.compareAt == null ? null : data.compareAt,
+      images: data.images?.length ? data.images : [data.imageUrl], slug, sellerId: req.user!.id } });
+    if (optionNames.length) await tx.product.update({ where: { id: created.id }, data: { inventory: await syncVariants(tx, created.id, variants) } });
+    return tx.product.findUniqueOrThrow({ where: { id: created.id }, include: productInclude });
+  });
   res.status(201).json({ product });
 }));
 
 sellerRouter.patch('/seller/products/:id', asyncHandler(async (req, res) => {
   const id = z.string().parse(req.params.id); const existing = await prisma.product.findFirst({ where: { id, sellerId: req.user!.id } });
-  if (!existing) throw new AppError(404, 'Product not found'); const data = productUpdateSchema.parse(req.body);
+  if (!existing) throw new AppError(404, 'Product not found'); const { variants, optionNames, ...data } = productUpdateSchema.parse(req.body);
+  // Options are replaced as a set: sending optionNames without variants (or the reverse) would leave them out of step.
+  if ((variants === undefined) !== (optionNames === undefined)) throw new AppError(400, 'Send option names and options together');
+  if (optionNames && variants) checkVariants(optionNames, variants);
   if (data.categoryId && !(await prisma.category.findUnique({ where: { id: data.categoryId }, select: { id: true } }))) throw new AppError(400, 'Category not found');
   const requestedStatus = data.status;
   const status = requestedStatus === ProductStatus.ACTIVE
@@ -109,10 +120,16 @@ sellerRouter.patch('/seller/products/:id', asyncHandler(async (req, res) => {
     : requestedStatus === ProductStatus.REJECTED
       ? (existing.status === ProductStatus.REJECTED ? ProductStatus.REJECTED : ProductStatus.PENDING)
       : requestedStatus;
-  const product = await prisma.product.update({ where: { id }, data: { ...data, status,
-    ...(data.compareAt !== undefined && { compareAt: data.compareAt === '' || data.compareAt == null ? null : data.compareAt }),
-    ...(data.name && data.name !== existing.name && { slug: await uniqueSlug(data.name, id) }),
-    ...(data.imageUrl && !data.images && { images: existing.images.length ? existing.images : [data.imageUrl] }) }, include: productInclude });
+  const slug = data.name && data.name !== existing.name ? await uniqueSlug(data.name, id) : undefined;
+  const product = await prisma.$transaction(async (tx) => {
+    let inventory = data.inventory;
+    if (optionNames && variants) inventory = optionNames.length ? await syncVariants(tx, id, variants) : (await syncVariants(tx, id, []), data.inventory);
+    else if (existing.optionNames.length) inventory = undefined; // Stock of a listing with options is edited per option.
+    return tx.product.update({ where: { id }, data: { ...data, inventory, status, ...(optionNames && { optionNames }),
+      ...(data.compareAt !== undefined && { compareAt: data.compareAt === '' || data.compareAt == null ? null : data.compareAt }),
+      ...(slug && { slug }),
+      ...(data.imageUrl && !data.images && { images: existing.images.length ? existing.images : [data.imageUrl] }) }, include: productInclude });
+  });
   res.json({ product });
 }));
 

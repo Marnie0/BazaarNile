@@ -109,6 +109,35 @@ authRouter.post('/logout', asyncHandler(async (req, res) => {
   res.status(204).send();
 }));
 
+const avatarUrl = z.url({ protocol: /^https?$/, hostname: z.regexes.domain }).max(1000);
+authRouter.patch('/me', requireAuth, asyncHandler(async (req, res) => {
+  const data = z.object({
+    displayName: z.string().trim().min(2, 'Name must contain at least 2 characters').max(60, 'Name is too long').optional(),
+    bio: z.string().trim().max(280, 'Bio can be up to 280 characters').nullable().optional().transform((value) => value === undefined ? undefined : value || null),
+    avatarUrl: z.union([avatarUrl, z.literal(''), z.null()]).optional().transform((value) => value === undefined ? undefined : value || null),
+  }).parse(req.body);
+  const user = await prisma.user.update({ where: { id: req.user!.id }, data, select: safeUser });
+  res.json({ user });
+}));
+
+// Changing the password signs out every other device: all refresh tokens are deleted and this
+// browser receives a fresh session.
+authRouter.post('/password', requireAuth, credentialLimiter, asyncHandler(async (req, res) => {
+  const data = z.object({
+    currentPassword: z.string().min(1, 'Enter your current password').max(72),
+    newPassword: z.string().min(8, 'Use at least 8 characters').max(72, 'Use at most 72 characters'),
+  }).parse(req.body);
+  const found = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.id } });
+  if (!(await bcrypt.compare(data.currentPassword, found.passwordHash))) throw new AppError(400, 'Your current password is incorrect');
+  if (data.currentPassword === data.newPassword) throw new AppError(400, 'Choose a password you haven’t used here');
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: found.id }, data: { passwordHash: await bcrypt.hash(data.newPassword, 12) } }),
+    prisma.refreshToken.deleteMany({ where: { userId: found.id } }),
+  ]);
+  const accessToken = await issueSession(found, res);
+  res.json({ accessToken });
+}));
+
 authRouter.get('/me', requireAuth, asyncHandler(async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.user!.id }, select: safeUser });
   if (!user) throw new AppError(404, 'User not found');

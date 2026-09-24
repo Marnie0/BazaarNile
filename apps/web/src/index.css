@@ -7,6 +7,7 @@
   --color-clay: #a44732;
   --color-sand: #f4ecdd;
   --color-gold: #d5a62e;
+  --color-gold-deep: #c4900f;
   --font-sans: "IBM Plex Sans", sans-serif;
   --font-display: "Newsreader", serif;
 }
@@ -18,7 +19,8 @@ button, input, select, textarea { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 img { display: block; max-width: 100%; }
 ::selection { background: #e6c86b; color: #342b25; }
-:where(a, button, input, select, textarea, summary):focus-visible { outline: 3px solid #244e5a; outline-offset: 4px; }
+/* Layered so utilities such as outline-none (inputs inside a ringed search pill) can opt out. */
+@layer base { :where(a, button, input, select, textarea, summary):focus-visible { outline: 3px solid #244e5a; outline-offset: 4px; } }
 .container-shell { width: min(1180px, calc(100% - 2rem)); margin-inline: auto; }
 .text-balance { text-wrap: balance; }
 /* Component classes live in a layer so Tailwind utilities (w-auto, rounded-full, py-2…) can override them. */
@@ -84,6 +86,8 @@ img { display: block; max-width: 100%; }
 .product-card__stock { display: flex; align-items: center; gap: .35rem; margin: .3rem 0 0; color: #c0262d; font-size: .8rem; font-weight: 700; }
 .product-card__stock::before { content: ""; width: .45rem; height: .45rem; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 3px rgba(192,38,45,.15); animation: stock-pulse 2s ease-in-out infinite; }
 @keyframes stock-pulse { 50% { box-shadow: 0 0 0 5px rgba(192,38,45,0); } }
+.product-card__rating { display: flex; align-items: center; gap: .35rem; margin-top: .3rem; color: rgba(52,43,37,.6); font-size: .78rem; }
+.product-card__rating strong { color: var(--color-ink); font-weight: 600; }
 .product-card__seller { margin: .2rem 0 0; overflow: hidden; color: rgba(52,43,37,.55); font-size: .8rem; text-overflow: ellipsis; white-space: nowrap; }
 
 .market-promises { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; margin-top: 2rem; margin-bottom: 6rem; border-block: 1px solid rgba(52,43,37,.16); }

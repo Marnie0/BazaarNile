@@ -2,6 +2,7 @@ import { CouponType, NotificationType, OrderStatus, Prisma, ProductStatus, Role,
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
+import { restoreStock } from '../lib/stock.js';
 import { requireAdmin } from '../middleware/admin.js';
 import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../utils/async-handler.js';
@@ -142,9 +143,7 @@ adminRouter.patch('/admin/orders/:orderNumber/status', asyncHandler(async (req, 
     const updated = await tx.order.updateMany({ where: { id: found.id, status: found.status }, data: { status } });
     if (!updated.count) throw new AppError(409, 'The order status changed. Refresh and try again');
     if (status === OrderStatus.CANCELLED) {
-      for (const item of found.items) {
-        if (item.productId) await tx.product.updateMany({ where: { id: item.productId }, data: { inventory: { increment: item.quantity } } });
-      }
+      await restoreStock(tx, found.items);
       const usage = await tx.couponUsage.findUnique({ where: { orderId: found.id } });
       if (usage) {
         await tx.couponUsage.delete({ where: { id: usage.id } });
@@ -246,6 +245,13 @@ adminRouter.patch('/admin/users/:id', asyncHandler(async (req, res) => {
   res.json({ user });
 }));
 
+const adminProductInclude = {
+  category: { select: { id: true, name: true, slug: true } },
+  seller: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
+  _count: { select: { orderItems: true } },
+  variants: { orderBy: { position: 'asc' as const }, select: { id: true, options: true, inventory: true } },
+} as const;
+
 adminRouter.get('/admin/products', asyncHandler(async (req, res) => {
   const query = z.object({
     search: z.string().trim().max(100).optional(), status: z.enum(ProductStatus).optional(),
@@ -265,13 +271,8 @@ adminRouter.get('/admin/products', asyncHandler(async (req, res) => {
       { seller: { displayName: { contains: query.search, mode: 'insensitive' } } },
     ] }),
   };
-  const include = {
-    category: { select: { id: true, name: true, slug: true } },
-    seller: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
-    _count: { select: { orderItems: true } },
-  } as const;
   const [products, total] = await prisma.$transaction([
-    prisma.product.findMany({ where, orderBy, skip: (query.page - 1) * query.limit, take: query.limit, include }),
+    prisma.product.findMany({ where, orderBy, skip: (query.page - 1) * query.limit, take: query.limit, include: adminProductInclude }),
     prisma.product.count({ where }),
   ]);
   res.json({ products, pagination: { page: query.page, limit: query.limit, total, pages: Math.ceil(total / query.limit) } });
@@ -298,7 +299,7 @@ adminRouter.patch('/admin/products/:id/moderate', asyncHandler(async (req, res) 
   if (!existing) throw new AppError(404, 'Product not found');
   const product = await prisma.product.update({
     where: { id }, data: { status },
-    include: { category: true, seller: { select: { id: true, username: true, displayName: true, avatarUrl: true } }, _count: { select: { orderItems: true } } },
+    include: adminProductInclude,
   });
   res.json({ product });
 }));
@@ -306,11 +307,26 @@ adminRouter.patch('/admin/products/:id/moderate', asyncHandler(async (req, res) 
 adminRouter.patch('/admin/products/:id/inventory', asyncHandler(async (req, res) => {
   const id = z.string().min(1).parse(req.params.id);
   const { inventory } = z.object({ inventory: z.coerce.number().int().min(0).max(1_000_000) }).parse(req.body);
-  const existing = await prisma.product.findUnique({ where: { id }, select: { id: true } });
+  const existing = await prisma.product.findUnique({ where: { id }, select: { id: true, optionNames: true } });
   if (!existing) throw new AppError(404, 'Product not found');
+  if (existing.optionNames.length) throw new AppError(409, 'This listing tracks stock per option. Update each option instead');
   const product = await prisma.product.update({
     where: { id }, data: { inventory },
-    include: { category: true, seller: { select: { id: true, username: true, displayName: true, avatarUrl: true } }, _count: { select: { orderItems: true } } },
+    include: adminProductInclude,
+  });
+  res.json({ product });
+}));
+
+// Per-option stock for listings with sizes or colors; the listing total follows the sum.
+adminRouter.patch('/admin/products/:id/variants/:variantId/inventory', asyncHandler(async (req, res) => {
+  const id = z.string().min(1).parse(req.params.id); const variantId = z.string().min(1).parse(req.params.variantId);
+  const { inventory } = z.object({ inventory: z.coerce.number().int().min(0).max(1_000_000) }).parse(req.body);
+  const product = await prisma.$transaction(async (tx) => {
+    const variant = await tx.productVariant.findFirst({ where: { id: variantId, productId: id }, select: { id: true } });
+    if (!variant) throw new AppError(404, 'Option not found');
+    await tx.productVariant.update({ where: { id: variantId }, data: { inventory } });
+    const total = await tx.productVariant.aggregate({ where: { productId: id }, _sum: { inventory: true } });
+    return tx.product.update({ where: { id }, data: { inventory: total._sum.inventory ?? 0 }, include: adminProductInclude });
   });
   res.json({ product });
 }));

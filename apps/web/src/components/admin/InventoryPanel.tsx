@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Boxes, CircleDollarSign, Minus, PackageCheck, PackageX, Plus, RotateCcw, Search, X } from 'lucide-react';
+import { AlertTriangle, Boxes, ChevronDown, CircleDollarSign, Minus, PackageCheck, PackageX, Plus, RotateCcw, Search, X } from 'lucide-react';
 import { useState, type KeyboardEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue';
@@ -36,51 +36,79 @@ export function StockMeter({ units }: { units: number }) {
   </div>;
 }
 
-function InventoryRow({ product }: { product: AdminProduct }) {
-  const queryClient = useQueryClient();
-  const [draft, setDraft] = useState(String(product.inventory));
+/** Minus / number / plus control that saves on Enter or the Save button; Esc undoes. */
+function StockStepper({ units, label, saving, onSave, compact = false }: { units: number; label: string; saving: boolean; onSave: (units: number) => void; compact?: boolean }) {
+  const [draft, setDraft] = useState(String(units));
   const value = Number(draft);
   const valid = draft.trim() !== '' && Number.isInteger(value) && value >= 0 && value <= MAX_STOCK;
-  const dirty = valid && value !== product.inventory;
+  const dirty = valid && value !== units;
+  const adjust = (delta: number) => setDraft(String(Math.min(MAX_STOCK, Math.max(0, (valid ? value : units) + delta))));
+  const commit = () => { if (dirty && !saving) onSave(value); };
+  const onKey = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') commit();
+    if (event.key === 'Escape') setDraft(String(units));
+  };
+  return <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+    <div className={`flex items-center rounded-full border bg-white focus-within:ring-2 focus-within:ring-nile/30 ${valid ? 'border-ink/12' : 'border-red-400'}`}>
+      <button type="button" onClick={() => adjust(-1)} disabled={saving || (valid ? value : units) <= 0} aria-label={`Decrease stock for ${label}`} className="grid size-9 place-items-center rounded-full disabled:opacity-30"><Minus size={14}/></button>
+      <input value={draft} onChange={(event) => setDraft(event.target.value.replace(/[^\d]/g, '').slice(0, 7))} onKeyDown={onKey} onFocus={(event) => event.currentTarget.select()} inputMode="numeric" aria-label={`Stock for ${label}`} aria-invalid={!valid} disabled={saving} className="w-14 bg-transparent text-center text-sm font-semibold tabular-nums outline-none"/>
+      <button type="button" onClick={() => adjust(1)} disabled={saving} aria-label={`Increase stock for ${label}`} className="grid size-9 place-items-center rounded-full disabled:opacity-30"><Plus size={14}/></button>
+    </div>
+    {dirty || saving ? <>
+      <Button className="px-4 py-2" disabled={!dirty || saving} onClick={commit}>{saving ? 'Saving…' : 'Save'}</Button>
+      <button type="button" onClick={() => setDraft(String(units))} disabled={saving} aria-label="Undo change" title="Undo" className="grid size-9 place-items-center rounded-full text-ink/50 hover:bg-sand hover:text-ink"><RotateCcw size={15}/></button>
+    </> : <div className="flex gap-1.5">{(compact ? [5] : [10, 25]).map((amount) => <button key={amount} type="button" onClick={() => adjust(amount)} className="rounded-full border border-ink/10 px-3 py-2 text-xs font-semibold text-ink/70 transition hover:border-nile/40 hover:text-nile">+{amount}</button>)}</div>}
+  </div>;
+}
+
+const refreshKeys = ['admin-inventory', 'admin-inventory-summary', 'admin-overview', 'admin-products', 'products', 'product', 'featured', 'latest'];
+
+function InventoryRow({ product }: { product: AdminProduct }) {
+  const queryClient = useQueryClient();
+  const [expanded, setExpanded] = useState(false);
+  const variants = product.variants ?? [];
+  const hasOptions = product.optionNames.length > 0 && variants.length > 0;
+  const refresh = () => Promise.all(refreshKeys.map((key) => queryClient.invalidateQueries({ queryKey: [key] })));
   const save = useMutation({
     mutationFn: (inventory: number) => api<{ product: AdminProduct }>(`/admin/products/${product.id}/inventory`, { method: 'PATCH', body: JSON.stringify({ inventory }) }),
-    onSuccess: async ({ product: saved }) => {
-      toast(`${saved.name}: stock set to ${saved.inventory.toLocaleString('en-EG')}`);
-      await Promise.all(['admin-inventory', 'admin-inventory-summary', 'admin-overview', 'admin-products', 'products', 'product', 'featured', 'latest']
-        .map((key) => queryClient.invalidateQueries({ queryKey: [key] })));
+    onSuccess: async ({ product: saved }) => { toast(`${saved.name}: stock set to ${saved.inventory.toLocaleString('en-EG')}`); await refresh(); },
+    onError: (error) => toastError(error, 'Could not update stock'),
+  });
+  const saveVariant = useMutation({
+    mutationFn: ({ variantId, inventory }: { variantId: string; inventory: number }) => api<{ product: AdminProduct }>(`/admin/products/${product.id}/variants/${variantId}/inventory`, { method: 'PATCH', body: JSON.stringify({ inventory }) }),
+    onSuccess: async (_, { variantId, inventory }) => {
+      const variant = variants.find((item) => item.id === variantId);
+      toast(`${product.name} (${variant?.options.join(' / ')}): stock set to ${inventory.toLocaleString('en-EG')}`); await refresh();
     },
     onError: (error) => toastError(error, 'Could not update stock'),
   });
-  const adjust = (delta: number) => setDraft(String(Math.min(MAX_STOCK, Math.max(0, (valid ? value : product.inventory) + delta))));
-  const commit = () => { if (dirty && !save.isPending) save.mutate(value); };
-  const onKey = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Enter') commit();
-    if (event.key === 'Escape') setDraft(String(product.inventory));
-  };
+  const soldOutOptions = variants.filter((variant) => variant.inventory <= 0).length;
 
-  return <li className="grid gap-4 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-x-6 sm:p-5 lg:grid-cols-[minmax(0,2.3fr)_minmax(0,1.3fr)_17rem] lg:items-center lg:gap-6">
-    <div className="flex min-w-0 items-center gap-3.5 sm:col-span-2 lg:col-span-1">
-      <img src={product.imageUrl} alt="" className="size-14 shrink-0 rounded-xl object-cover sm:size-16"/>
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          {product.status === 'ACTIVE' ? <Link to={`/products/${product.slug}`} className="truncate font-semibold hover:text-clay">{product.name}</Link> : <p className="truncate font-semibold">{product.name}</p>}
-          {product.status !== 'ACTIVE' && <Badge tone={productStatus[product.status].tone} title={productStatus[product.status].help}>{productStatus[product.status].label}</Badge>}
+  return <li className="p-4 sm:p-5">
+    <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-x-6 lg:grid-cols-[minmax(0,2.3fr)_minmax(0,1.3fr)_17rem] lg:items-center lg:gap-6">
+      <div className="flex min-w-0 items-center gap-3.5 sm:col-span-2 lg:col-span-1">
+        <img src={product.imageUrl} alt="" className="size-14 shrink-0 rounded-xl object-cover sm:size-16"/>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            {product.status === 'ACTIVE' ? <Link to={`/products/${product.slug}`} className="truncate font-semibold hover:text-clay">{product.name}</Link> : <p className="truncate font-semibold">{product.name}</p>}
+            {product.status !== 'ACTIVE' && <Badge tone={productStatus[product.status].tone} title={productStatus[product.status].help}>{productStatus[product.status].label}</Badge>}
+          </div>
+          <p className="mt-0.5 truncate text-xs text-ink/55">{product.category.name} · {money(product.price)} · {product.seller.displayName}</p>
         </div>
-        <p className="mt-0.5 truncate text-xs text-ink/55">{product.category.name} · {money(product.price)} · {product.seller.displayName}</p>
       </div>
+      <StockMeter units={product.inventory}/>
+      {hasOptions ? <div className="flex sm:justify-end">
+        <button type="button" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded} aria-controls={`options-${product.id}`} className="flex items-center gap-2 rounded-full border border-ink/12 bg-white px-4 py-2 text-sm font-semibold transition hover:border-nile/40 hover:text-nile">
+          {variants.length} {product.optionNames.join(' / ').toLowerCase()} options{soldOutOptions > 0 && <span className="rounded-full bg-red-100 px-1.5 text-[11px] text-red-700">{soldOutOptions} out</span>}<ChevronDown size={15} className={`transition ${expanded ? 'rotate-180' : ''}`}/>
+        </button>
+      </div> : <StockStepper key={product.inventory} units={product.inventory} label={product.name} saving={save.isPending} onSave={(units) => save.mutate(units)}/>}
     </div>
-    <StockMeter units={product.inventory}/>
-    <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-      <div className={`flex items-center rounded-full border bg-white ${valid ? 'border-ink/12' : 'border-red-400'}`}>
-        <button type="button" onClick={() => adjust(-1)} disabled={save.isPending || (valid ? value : product.inventory) <= 0} aria-label={`Decrease stock for ${product.name}`} className="grid size-9 place-items-center rounded-full disabled:opacity-30"><Minus size={14}/></button>
-        <input value={draft} onChange={(event) => setDraft(event.target.value.replace(/[^\d]/g, '').slice(0, 7))} onKeyDown={onKey} onFocus={(event) => event.currentTarget.select()} inputMode="numeric" aria-label={`Stock for ${product.name}`} aria-invalid={!valid} disabled={save.isPending} className="w-14 bg-transparent text-center text-sm font-semibold tabular-nums outline-none"/>
-        <button type="button" onClick={() => adjust(1)} disabled={save.isPending} aria-label={`Increase stock for ${product.name}`} className="grid size-9 place-items-center rounded-full disabled:opacity-30"><Plus size={14}/></button>
-      </div>
-      {dirty || save.isPending ? <>
-        <Button className="px-4 py-2" disabled={!dirty || save.isPending} onClick={commit}>{save.isPending ? 'Saving…' : 'Save'}</Button>
-        <button type="button" onClick={() => setDraft(String(product.inventory))} disabled={save.isPending} aria-label="Undo change" title="Undo" className="grid size-9 place-items-center rounded-full text-ink/50 hover:bg-sand hover:text-ink"><RotateCcw size={15}/></button>
-      </> : <div className="flex gap-1.5">{[10, 25].map((amount) => <button key={amount} type="button" onClick={() => adjust(amount)} className="rounded-full border border-ink/10 px-3 py-2 text-xs font-semibold text-ink/70 transition hover:border-nile/40 hover:text-nile">+{amount}</button>)}</div>}
-    </div>
+    {hasOptions && expanded && <ul id={`options-${product.id}`} className="mt-4 grid gap-2 rounded-2xl bg-sand/50 p-3 sm:p-4 lg:ml-[4.9rem]">
+      {variants.map((variant) => { const level = levelStyle[stockLevel(variant.inventory)]; return <li key={`${variant.id}-${variant.inventory}`} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white px-3 py-2">
+        <span className="min-w-0 text-sm"><strong className="font-semibold">{variant.options.join(' / ')}</strong> <span className={`ml-1 text-xs font-semibold ${level.text}`}>{level.label(variant.inventory)}</span></span>
+        <StockStepper compact units={variant.inventory} label={`${product.name} ${variant.options.join(' / ')}`} saving={saveVariant.isPending && saveVariant.variables?.variantId === variant.id} onSave={(inventory) => saveVariant.mutate({ variantId: variant.id, inventory })}/>
+      </li>; })}
+    </ul>}
   </li>;
 }
 
@@ -128,11 +156,11 @@ export function InventoryPanel() {
     <div className={`surface mt-5 overflow-hidden transition-opacity ${products.isFetching && !products.isLoading ? 'opacity-70' : ''}`}>
       <div className="hidden grid-cols-[minmax(0,2.3fr)_minmax(0,1.3fr)_17rem] gap-6 border-b border-ink/8 bg-sand/50 px-5 py-3 text-xs font-bold uppercase tracking-wider text-ink/50 lg:grid"><span>Product</span><span>Stock left</span><span className="text-right">Adjust</span></div>
       {products.isLoading ? <ul className="divide-y divide-ink/8">{Array.from({ length: 5 }, (_, index) => <li key={index} className="flex animate-pulse items-center gap-4 p-5"><div className="size-14 rounded-xl bg-ink/8"/><div className="flex-1"><div className="h-4 w-1/2 rounded bg-ink/8"/><div className="mt-2 h-3 w-1/3 rounded bg-ink/8"/></div></li>)}</ul>
-        : list.length ? <ul className="divide-y divide-ink/8">{list.map((product) => <InventoryRow key={`${product.id}-${product.inventory}`} product={product}/>)}</ul>
+        : list.length ? <ul className="divide-y divide-ink/8">{list.map((product) => <InventoryRow key={product.id} product={product}/>)}</ul>
         : <div className="grid place-items-center px-6 py-16 text-center"><PackageCheck className="text-nile" size={32}/><h3 className="mt-3 font-display text-2xl font-semibold">{filter === 'out' ? 'Nothing is out of stock' : filter === 'low' ? 'Nothing is running low' : 'No matching products'}</h3><p className="mt-1 text-sm text-ink/55">{filter ? 'Every listing in this view is well stocked.' : 'Try a different search.'}</p></div>}
     </div>
 
     {pagination && pagination.pages > 1 && <div className="mt-5 flex flex-wrap items-center justify-between gap-3 text-sm text-ink/60"><span>{(pagination.page - 1) * pagination.limit + 1}–{Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}</span><div className="flex items-center gap-2"><Button variant="outline" className="px-4 py-2" disabled={pagination.page <= 1} onClick={() => setPage(pagination.page - 1)}>Previous</Button><Button variant="outline" className="px-4 py-2" disabled={pagination.page >= pagination.pages} onClick={() => setPage(pagination.page + 1)}>Next</Button></div></div>}
-    <p className="mt-4 text-xs text-ink/50">Tip: type a number and press Enter to save, or Esc to undo. Shoppers see “Only N left” in red when 3 or fewer remain.</p>
+    <p className="mt-4 text-xs text-ink/50">Tip: type a number and press Enter to save, or Esc to undo. Listings with sizes or colours are restocked per option. Shoppers see “Only N left” in red when 3 or fewer remain.</p>
   </section>;
 }

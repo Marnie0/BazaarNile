@@ -1,15 +1,15 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast, toastError } from '../lib/toast';
-import { api, type Cart, type Product } from '../lib/api';
+import { api, type Cart, type Product, type Variant } from '../lib/api';
 
 export function useAddToCart() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ product, quantity }: { product: Pick<Product, 'id' | 'name'>; quantity: number }) =>
-      api<{ cart: Cart }>('/cart/items', { method: 'POST', body: JSON.stringify({ productId: product.id, quantity }) }),
-    onSuccess: (result, { product, quantity }) => {
+    mutationFn: ({ product, quantity, variant }: { product: Pick<Product, 'id' | 'name'>; quantity: number; variant?: Variant }) =>
+      api<{ cart: Cart }>('/cart/items', { method: 'POST', body: JSON.stringify({ productId: product.id, variantId: variant?.id, quantity }) }),
+    onSuccess: (result, { product, quantity, variant }) => {
       queryClient.setQueryData(['cart'], result);
-      toast(`${quantity > 1 ? `${quantity} × ` : ''}${product.name} added to your cart`, { action: { label: 'View cart', to: '/cart' } });
+      toast(`${quantity > 1 ? `${quantity} × ` : ''}${product.name}${variant ? ` (${variant.options.join(' / ')})` : ''} added to your cart`, { action: { label: 'View cart', to: '/cart' } });
     },
     onError: (error) => toastError(error, 'Could not add this item to your cart'),
   });

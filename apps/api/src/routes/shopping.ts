@@ -3,6 +3,7 @@ import { CouponType, NotificationType, OrderStatus, Prisma, ProductStatus } from
 import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
+import { cartLineKey, restoreStock, variantLabel } from '../lib/stock.js';
 import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../utils/async-handler.js';
 import { AppError } from '../utils/errors.js';
@@ -16,7 +17,7 @@ const productInclude = {
 } as const;
 
 const cartInclude = {
-  items: { orderBy: { createdAt: 'asc' as const }, include: { product: { include: productInclude } } },
+  items: { orderBy: { createdAt: 'asc' as const }, include: { product: { include: productInclude }, variant: { select: { id: true, options: true, inventory: true } } } },
 } as const;
 
 async function serializableTransaction<T>(operation: (tx: Prisma.TransactionClient) => Promise<T>) {
@@ -41,17 +42,26 @@ shoppingRouter.get('/cart', asyncHandler(async (req, res) => {
 }));
 
 shoppingRouter.post('/cart/items', asyncHandler(async (req, res) => {
-  const data = z.object({ productId: z.string().min(1), quantity: z.number().int().min(1).max(20).default(1) }).parse(req.body);
+  const data = z.object({ productId: z.string().min(1), variantId: z.string().min(1).max(40).optional(), quantity: z.number().int().min(1).max(20).default(1) }).parse(req.body);
   const product = await prisma.product.findFirst({ where: { id: data.productId, status: ProductStatus.ACTIVE } });
   if (!product) throw new AppError(404, 'Product not found');
-  if (product.inventory < data.quantity) throw new AppError(409, 'Not enough inventory available');
+  let stock = product.inventory;
+  if (product.optionNames.length) {
+    if (!data.variantId) throw new AppError(400, `Choose a ${product.optionNames.join(' and ').toLowerCase()} first`);
+    const variant = await prisma.productVariant.findFirst({ where: { id: data.variantId, productId: product.id } });
+    if (!variant) throw new AppError(404, 'That option is no longer available');
+    stock = variant.inventory;
+  } else if (data.variantId) throw new AppError(400, 'This product has no options');
+  const variantId = product.optionNames.length ? data.variantId! : null;
+  if (stock < data.quantity) throw new AppError(409, 'Not enough inventory available');
   const cart = await prisma.cart.upsert({ where: { userId: req.user!.id }, create: { userId: req.user!.id }, update: {} });
-  const existing = await prisma.cartItem.findUnique({ where: { cartId_productId: { cartId: cart.id, productId: product.id } } });
+  const lineKey = cartLineKey(product.id, variantId);
+  const existing = await prisma.cartItem.findUnique({ where: { cartId_lineKey: { cartId: cart.id, lineKey } } });
   const quantity = Math.min((existing?.quantity ?? 0) + data.quantity, 20);
-  if (quantity > product.inventory) throw new AppError(409, 'Not enough inventory available');
+  if (quantity > stock) throw new AppError(409, 'Not enough inventory available');
   await prisma.cartItem.upsert({
-    where: { cartId_productId: { cartId: cart.id, productId: product.id } },
-    create: { cartId: cart.id, productId: product.id, quantity: data.quantity },
+    where: { cartId_lineKey: { cartId: cart.id, lineKey } },
+    create: { cartId: cart.id, productId: product.id, variantId, lineKey, quantity: data.quantity },
     update: { quantity },
   });
   const result = await prisma.cart.findUniqueOrThrow({ where: { id: cart.id }, include: cartInclude });
@@ -61,10 +71,10 @@ shoppingRouter.post('/cart/items', asyncHandler(async (req, res) => {
 shoppingRouter.patch('/cart/items/:itemId', asyncHandler(async (req, res) => {
   const itemId = z.string().parse(req.params.itemId);
   const { quantity } = z.object({ quantity: z.number().int().min(1).max(20) }).parse(req.body);
-  const item = await prisma.cartItem.findFirst({ where: { id: itemId, cart: { userId: req.user!.id } }, include: { product: true } });
+  const item = await prisma.cartItem.findFirst({ where: { id: itemId, cart: { userId: req.user!.id } }, include: { product: true, variant: true } });
   if (!item) throw new AppError(404, 'Cart item not found');
   if (item.product.status !== ProductStatus.ACTIVE) throw new AppError(409, `${item.product.name} is no longer available`);
-  if (quantity > item.product.inventory) throw new AppError(409, 'Not enough inventory available');
+  if (quantity > (item.variant ? item.variant.inventory : item.product.inventory)) throw new AppError(409, 'Not enough inventory available');
   await prisma.cartItem.update({ where: { id: item.id }, data: { quantity } });
   const cart = await prisma.cart.findUniqueOrThrow({ where: { id: item.cartId }, include: cartInclude });
   res.json({ cart });
@@ -146,11 +156,17 @@ shoppingRouter.post('/checkout', asyncHandler(async (req, res) => {
   const order = await serializableTransaction(async (tx) => {
     const cart = await tx.cart.findUnique({
       where: { userId: req.user!.id },
-      include: { items: { include: { product: true } } },
+      include: { items: { include: { product: true, variant: true } } },
     });
     if (!cart?.items.length) throw new AppError(400, 'Your cart is empty');
     for (const item of cart.items) {
       if (item.product.status !== ProductStatus.ACTIVE) throw new AppError(409, `${item.product.name} is no longer available`);
+      if (item.product.optionNames.length && !item.variant) throw new AppError(409, `Choose an option for ${item.product.name} in your cart`);
+      if (item.variant) {
+        const label = item.variant.options.join(' / ');
+        const taken = await tx.productVariant.updateMany({ where: { id: item.variant.id, inventory: { gte: item.quantity } }, data: { inventory: { decrement: item.quantity } } });
+        if (!taken.count) throw new AppError(409, `Not enough inventory for ${item.product.name} (${label})`);
+      }
       const updated = await tx.product.updateMany({
         where: { id: item.productId, status: ProductStatus.ACTIVE, inventory: { gte: item.quantity } },
         data: { inventory: { decrement: item.quantity } },
@@ -169,6 +185,7 @@ shoppingRouter.post('/checkout', asyncHandler(async (req, res) => {
         items: { create: cart.items.map((item) => ({
           productId: item.productId, sellerId: item.product.sellerId, productName: item.product.name,
           productSlug: item.product.slug, imageUrl: item.product.imageUrl, unitPrice: item.product.price,
+          variantId: item.variant?.id ?? null, variantLabel: item.variant ? variantLabel(item.product.optionNames, item.variant.options) : null,
           quantity: item.quantity, lineTotal: item.product.price.mul(item.quantity),
         })) },
       },
@@ -216,9 +233,7 @@ shoppingRouter.patch('/orders/:orderNumber/cancel', asyncHandler(async (req, res
       data: { status: OrderStatus.CANCELLED },
     });
     if (!cancelled.count) throw new AppError(409, 'This order can no longer be cancelled');
-    for (const item of found.items) {
-      if (item.productId) await tx.product.update({ where: { id: item.productId }, data: { inventory: { increment: item.quantity } } });
-    }
+    await restoreStock(tx, found.items);
     const usage = await tx.couponUsage.findUnique({ where: { orderId: found.id } });
     if (usage) {
       await tx.couponUsage.delete({ where: { id: usage.id } });

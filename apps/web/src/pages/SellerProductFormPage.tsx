@@ -10,21 +10,28 @@ import { Field, Input, Select, Textarea } from '../components/ui/Field';
 import { Button } from '../components/ui/Button';
 import { api, ApiError, type Category, type SellerProduct, type User } from '../lib/api';
 import { money } from '../lib/utils';
+import { VariantEditor, type VariantDraft } from '../components/seller/VariantEditor';
 
 export function SellerProductFormPage() {
   const { id } = useParams(); const editing = Boolean(id); const navigate = useNavigate(); const queryClient = useQueryClient();
   useDocumentTitle(editing ? 'Edit listing' : 'New product');
   const [preview, setPreview] = useState({ name: '', price: '', imageUrl: '' }); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
+  const [options, setOptions] = useState<VariantDraft | null | string>(null);
   const me = useQuery({ queryKey: ['me'], queryFn: () => api<{ user: User }>('/auth/me'), retry: false });
   const categories = useQuery({ queryKey: ['categories'], queryFn: () => api<{ categories: Category[] }>('/categories') });
   const product = useQuery({ queryKey: ['seller-product', id], queryFn: () => api<{ product: SellerProduct }>(`/seller/products/${id}`), enabled: editing, retry: false });
   useEffect(() => { const saved = product.data?.product; if (saved) setPreview({ name: saved.name, price: saved.price, imageUrl: saved.imageUrl }); }, [product.data]);
   const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault(); setBusy(true); setError('');
+    event.preventDefault(); setError('');
+    if (typeof options === 'string') { setError(options); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    setBusy(true);
     const form = Object.fromEntries(new FormData(event.currentTarget));
     const extraImages = String(form.extraImages ?? '').split(/\s+/).map((url) => url.trim()).filter(Boolean);
     const { extraImages: _omit, ...fields } = form; void _omit;
-    const payload = { ...fields, price: Number(form.price), compareAt: form.compareAt ? Number(form.compareAt) : null, inventory: Number(form.inventory), images: [...new Set([String(form.imageUrl), ...extraImages])].slice(0, 8) };
+    const payload = { ...fields, price: Number(form.price), compareAt: form.compareAt ? Number(form.compareAt) : null, images: [...new Set([String(form.imageUrl), ...extraImages])].slice(0, 8),
+      // Options are sent as a set; turning them off on an existing listing clears them.
+      inventory: options ? options.variants.reduce((sum, variant) => sum + variant.inventory, 0) : Number(form.inventory),
+      ...(options ? { optionNames: options.optionNames, variants: options.variants } : product.data?.product.optionNames.length ? { optionNames: [], variants: [] } : {}) };
     try {
       await api(`/seller/products${editing ? `/${id}` : ''}`, { method: editing ? 'PATCH' : 'POST', body: JSON.stringify(payload) });
       await Promise.all(['seller-products', 'seller-overview', 'seller-product', 'products', 'product'].map((key) => queryClient.invalidateQueries({ queryKey: [key] })));
@@ -45,7 +52,8 @@ export function SellerProductFormPage() {
         <Field label="Product name"><Input name="name" required minLength={3} maxLength={120} defaultValue={saved?.name} onChange={(event) => setPreview((value) => ({ ...value, name: event.target.value }))} placeholder="e.g. Handwoven cotton throw"/></Field>
         <Field label="Description" hint="At least 20 characters. Materials, size, and care instructions help shoppers decide."><Textarea className="min-h-36 resize-y" name="description" required minLength={20} maxLength={3000} defaultValue={saved?.description} placeholder="Tell shoppers what makes this product special…"/></Field>
         <div className="grid gap-5 sm:grid-cols-2"><Field label="Price (EGP)"><Input name="price" type="number" inputMode="decimal" min="1" step="0.01" required defaultValue={saved?.price} onChange={(event) => setPreview((value) => ({ ...value, price: event.target.value }))}/></Field><Field label="Compare-at price" hint="Optional — the original price, shown struck through"><Input name="compareAt" type="number" inputMode="decimal" min="1" step="0.01" defaultValue={saved?.compareAt}/></Field></div>
-        <div className="grid gap-5 sm:grid-cols-2"><Field label="Category"><Select name="categoryId" required defaultValue={saved?.category.id ?? ''}><option value="" disabled>Choose a category</option>{categories.data?.categories.map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}</Select></Field><Field label="Inventory"><Input name="inventory" type="number" inputMode="numeric" min="0" step="1" required defaultValue={saved?.inventory ?? 0}/></Field></div>
+        <div className="grid gap-5 sm:grid-cols-2"><Field label="Category"><Select name="categoryId" required defaultValue={saved?.category.id ?? ''}><option value="" disabled>Choose a category</option>{categories.data?.categories.map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}</Select></Field>{options ? <Field label="Inventory" hint="Set per option below"><Input value={typeof options === 'string' ? '' : options.variants.reduce((sum, variant) => sum + variant.inventory, 0)} readOnly disabled/></Field> : <Field label="Inventory"><Input name="inventory" type="number" inputMode="numeric" min="0" step="1" required defaultValue={saved?.inventory ?? 0}/></Field>}</div>
+        <VariantEditor initialNames={saved?.optionNames} initialVariants={saved?.variants} onChange={setOptions}/>
         <Field label="Main image URL" hint="An https:// link to a square, high-resolution photo"><Input name="imageUrl" type="url" pattern="https?://.+" required value={preview.imageUrl} onChange={(event) => setPreview((value) => ({ ...value, imageUrl: event.target.value }))} placeholder="https://…"/></Field>
         <Field label="More images" hint="Optional — up to 7 more https:// links, one per line"><Textarea className="min-h-24 resize-y font-mono text-xs" name="extraImages" defaultValue={extraImages} placeholder="https://…"/></Field>
         <Field label="Listing status"><Select name="status" defaultValue={saved?.status ?? 'PENDING'}>{saved?.status === 'ACTIVE' && <option value="ACTIVE">Active — visible in the shop</option>}{saved?.status === 'REJECTED' && <option value="REJECTED">Rejected — edit and resubmit</option>}<option value="PENDING">Submit for admin review</option><option value="DRAFT">Draft — only visible to you</option><option value="ARCHIVED">Archived — no longer for sale</option></Select></Field>
