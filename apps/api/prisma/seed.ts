@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { CouponType, PrismaClient, ProductStatus, Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
@@ -36,11 +37,15 @@ const products = [
 ] as const;
 
 async function main() {
+  // Never commit a password: use SEED_SELLER_PASSWORD, or generate one and show it once.
+  const existing = await prisma.user.findUnique({ where: { email: 'seller@bazaarnile.com' }, select: { id: true } });
+  const password = process.env.SEED_SELLER_PASSWORD || randomBytes(18).toString('base64url');
   const seller = await prisma.user.upsert({
     where: { email: 'seller@bazaarnile.com' }, update: {},
     create: { email: 'seller@bazaarnile.com', username: 'nile_select', displayName: 'Nile Select',
-      bio: 'Curated essentials from trusted makers.', passwordHash: await bcrypt.hash('BazaarNile123!', 12), role: Role.SELLER },
+      bio: 'Curated essentials from trusted makers.', passwordHash: await bcrypt.hash(password, 12), role: Role.SELLER },
   });
+  if (!existing && !process.env.SEED_SELLER_PASSWORD) console.log(`Created seller@bazaarnile.com with password: ${password}`);
   const categoryMap = new Map<string, string>();
   for (const category of categories) {
     const saved = await prisma.category.upsert({ where: { slug: category.slug }, update: category, create: category });

@@ -208,7 +208,7 @@ echo 'VITE_API_URL="http://localhost:4000/api"' > apps/web/.env.local
 # 3. Database
 npm run db:generate
 npm run db:migrate
-npm run db:seed                                   # starter data
+npm run db:seed                                   # starter data + demo seller (password printed once)
 npm run db:seed:catalog -w @bazaarnile/api        # 8 categories, 8 shops, 70+ products
 npm run db:seed:reviews -w @bazaarnile/api        # sizes/colours and demo reviews
 
